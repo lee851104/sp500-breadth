@@ -27,17 +27,19 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-for k, v in [("theme", "dark"), ("sort_mode", "contrib"), ("time_range", "5Y")]:
-    if k not in st.session_state:
-        st.session_state[k] = v
+st.session_state.setdefault("sort_mode", "contrib")
+st.session_state.setdefault("time_range", "5Y")
+st.session_state["theme"] = "dark"
 
 T       = DARK if st.session_state.theme == "dark" else LIGHT
 is_dark = st.session_state.theme == "dark"
 
 # ─── CSS ─────────────────────────────────────────────────────
-st.markdown("""<style>
-@import url("https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&display=swap");
-</style>""", unsafe_allow_html=True)
+st.markdown(
+    '<link rel="preconnect" href="https://fonts.googleapis.com">'
+    '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+    '<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">',
+    unsafe_allow_html=True)
 
 st.markdown(f"""<style>
 html, body, [class*="css"] {{
