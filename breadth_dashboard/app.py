@@ -175,56 +175,52 @@ today_str = date.today().strftime("%Y-%m-%d")
 is_stale  = (not history.empty) and (data_date < today_str)
 
 # ═══════════════════════════════════════════════════════════════
-# 頂部列
 # ═══════════════════════════════════════════════════════════════
+# 標題列
+# ═══════════════════════════════════════════════════════════════
+lbl_theme = "☀ 淺色" if is_dark else "☾ 深色"
 st.markdown(
-    '<div style="display:flex;align-items:center;gap:10px;padding:12px 0 6px;">'
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0 6px;">'
+    '<div style="display:flex;align-items:center;gap:10px;">'
     '<span style="font-size:14px;font-weight:700;letter-spacing:.06em;'
     'text-transform:uppercase;color:' + T["text_h"] + ';">S&amp;P 500 Breadth</span>'
     '<span style="width:7px;height:7px;border-radius:50%;background:' + T["green"] + ';'
     'display:inline-block;animation:blink 2s infinite;"></span>'
+    '</div>'
     '</div>', unsafe_allow_html=True)
+
+# 主題切換放標題右側
+_, _t2 = st.columns([9, 1])
+with _t2:
+    if st.button(lbl_theme, key="btn_theme"):
+        st.session_state.theme = "light" if is_dark else "dark"; st.rerun()
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════
-# 指標面板 + 日期 + 主題切換 + 更新按鈕（同一列）
+# 指標面板（全寬）— 更新按鈕嵌在 card 右上角
 # ═══════════════════════════════════════════════════════════════
 sig_html = indicators_html(cur50, cur200)
-ind_col, b1, b2, b3 = st.columns([5, 1, 1, 1], gap="small")
-
-with ind_col:
-    if sig_html:
-        stale_badge = (
-            ' <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;'
-            'background:' + T["orange"] + '22;color:' + T["orange"] + ';">資料非最新</span>'
-            if is_stale else ""
-        )
-        date_row = (
-            '<div style="font-size:10px;color:' + T["text_dim"] + ';margin-bottom:8px;">'
-            '資料截至 <b style="color:' + T["text_p"] + ';">' + data_date + '</b>'
-            + stale_badge + '</div>'
-        )
+if sig_html:
+    stale_badge = (
+        ' <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;'
+        'background:' + T["orange"] + '22;color:' + T["orange"] + ';">資料非最新</span>'
+        if is_stale else ""
+    )
+    date_row = (
+        '<div style="font-size:10px;color:' + T["text_dim"] + ';margin-bottom:8px;">'
+        '資料截至 <b style="color:' + T["text_p"] + ';">' + data_date + '</b>'
+        + stale_badge + '</div>'
+    )
+    ind_col, refresh_col = st.columns([4, 1])
+    with ind_col:
         card(date_row + sig_html, pad="10px 16px")
-
-with b1:
-    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
-    lbl_light = ("✓ " if not is_dark else "") + "淺色"
-    if st.button(lbl_light, key="btn_light"):
-        st.session_state.theme = "light"; st.rerun()
-
-with b2:
-    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
-    lbl_dark = ("✓ " if is_dark else "") + "深色"
-    if st.button(lbl_dark, key="btn_dark"):
-        st.session_state.theme = "dark"; st.rerun()
-
-with b3:
-    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
-    if st.button("↻ 更新", key="btn_refresh"):
-        cache.clear_all()
-        st.cache_resource.clear()
-        st.rerun()
+    with refresh_col:
+        st.markdown('<div style="height:14px;"></div>', unsafe_allow_html=True)
+        if st.button("↻ 更新資料", key="btn_refresh"):
+            cache.clear_all()
+            st.cache_resource.clear()
+            st.rerun()
 
 # ═══════════════════════════════════════════════════════════════
 # 主體：左欄（大）+ 右欄
@@ -352,14 +348,12 @@ with left_col:
         fixedrange=True,
     )
 
-    chart_lbl = (
-        '<div style="font-size:9px;font-weight:700;letter-spacing:.13em;'
-        'text-transform:uppercase;color:' + T["text_dim"] + ';margin-bottom:10px;">'
-        '歷史市場寬度（2004 – ' + str(date.today().year) + '）</div>'
-    )
     st.markdown(
         '<div style="background:' + T["bg_card"] + ';border:1px solid ' + T["border"] + ';'
-        'border-radius:10px;padding:16px 16px 4px;margin-bottom:12px;">' + chart_lbl,
+        'border-radius:10px;padding:16px 16px 4px;margin-bottom:12px;">'
+        '<div style="font-size:9px;font-weight:700;letter-spacing:.13em;'
+        'text-transform:uppercase;color:' + T["text_dim"] + ';margin-bottom:10px;">'
+        '歷史市場寬度（2004 – ' + str(date.today().year) + '）</div>',
         unsafe_allow_html=True)
     st.plotly_chart(fig, use_container_width=True, config={
         "scrollZoom": True, "displayModeBar": True,
@@ -392,6 +386,175 @@ with left_col:
 # 右欄
 # ───────────────────────────────────────────────────────────────
 with right_col:
+
+    # ── 個股排名查詢 ────────────────────────────────────────
+    ticker_input = st.text_input(
+        "查詢個股排名",
+        placeholder="代碼或公司名稱",
+        key="ticker_lookup",
+        label_visibility="visible",
+    ).strip()
+
+    if ticker_input and not stock_metrics.empty:
+        df_all = stock_metrics.copy()
+        q_upper = ticker_input.upper()
+
+        # 精確符合 symbol 優先；否則做模糊搜尋
+        exact_match = df_all[df_all["symbol"] == q_upper]
+        if not exact_match.empty:
+            resolved_symbol = q_upper
+        else:
+            fuzzy = df_all[
+                df_all["symbol"].str.contains(q_upper, case=False, na=False) |
+                df_all["company"].str.contains(ticker_input, case=False, na=False)
+            ]
+            if len(fuzzy) == 1:
+                resolved_symbol = fuzzy.iloc[0]["symbol"]
+            elif len(fuzzy) > 1:
+                options = [
+                    row["symbol"] + "  " + str(row["company"])[:30]
+                    for _, row in fuzzy.head(10).iterrows()
+                ]
+                chosen = st.selectbox(
+                    "找到多個符合結果，請選擇：",
+                    options=[""] + options,
+                    key="ticker_select",
+                )
+                resolved_symbol = chosen.split("  ")[0].strip() if chosen else None
+            else:
+                resolved_symbol = None
+
+        if resolved_symbol:
+            rank_contrib = (
+                df_all.assign(_rank=df_all["contrib_score"].rank(ascending=False, method="min"))
+                .set_index("symbol")["_rank"]
+            )
+            rank_dist = (
+                df_all.dropna(subset=["dist_50"])
+                .assign(_rank=lambda d: d["dist_50"].rank(ascending=False, method="min"))
+                .set_index("symbol")["_rank"]
+            )
+            df_all["_sp"] = df_all["signal_200"].abs() * 2 + df_all["signal_50"].abs()
+            rank_signal = (
+                df_all.assign(_rank=df_all["_sp"].rank(ascending=False, method="min"))
+                .set_index("symbol")["_rank"]
+            )
+
+            total_contrib = len(rank_contrib)
+            total_dist    = len(rank_dist)
+            total_signal  = len(rank_signal)
+
+            row_data = df_all[df_all["symbol"] == resolved_symbol].iloc[0]
+            company_name = str(row_data.get("company", ""))[:22]
+
+            r_contrib = int(rank_contrib.get(resolved_symbol, 0))
+            r_dist    = int(rank_dist.get(resolved_symbol, 0)) if resolved_symbol in rank_dist.index else None
+            r_signal  = int(rank_signal.get(resolved_symbol, 0))
+
+            def _rank_color(r, total):
+                pct = r / total if total else 1
+                if pct <= 0.1:  return T["green"]
+                if pct <= 0.33: return T["blue"]
+                if pct <= 0.66: return T["text_p"]
+                return T["text_dim"]
+
+            def _rank_cell(r, total, label):
+                if r is None:
+                    val_html = '<span style="color:' + T["text_dim"] + ';font-size:12px;">—</span>'
+                else:
+                    c = _rank_color(r, total)
+                    val_html = (
+                        '<span style="font-size:16px;font-weight:900;color:' + c + ';">#' + str(r) + '</span>'
+                        '<span style="font-size:10px;color:' + T["text_dim"] + ';"> / ' + str(total) + '</span>'
+                    )
+                return (
+                    '<div style="flex:1;text-align:center;padding:8px 4px;">'
+                    '<div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;'
+                    'color:' + T["text_dim"] + ';margin-bottom:4px;">' + label + '</div>'
+                    + val_html +
+                    '</div>'
+                )
+
+            # 下半部：依目前排序模式顯示對應詳細資訊
+            sort_mode = st.session_state.sort_mode
+
+            def _detail_row(label, val_html):
+                return (
+                    '<div style="display:flex;justify-content:space-between;align-items:center;'
+                    'padding:5px 0;border-bottom:1px solid ' + T["border"] + ';">'
+                    '<span style="font-size:11px;color:' + T["text_dim"] + ';">' + label + '</span>'
+                    + val_html +
+                    '</div>'
+                )
+
+            def _val(v, suffix="", positive_green=True):
+                if v is None or (isinstance(v, float) and pd.isna(v)):
+                    return '<span style="font-size:12px;color:' + T["text_dim"] + ';">—</span>'
+                c = T["green"] if (v >= 0 and positive_green) else (T["red"] if (v < 0 and positive_green) else T["text_p"])
+                sign = "+" if v >= 0 else ""
+                return '<span style="font-size:12px;font-weight:700;color:' + c + ';">' + sign + f"{v:.2f}" + suffix + '</span>'
+
+            if sort_mode == "contrib":
+                cs  = row_data.get("contrib_score", 0) or 0
+                ret = row_data.get("daily_return")
+                w   = row_data.get("weight_pct")
+                detail_html = (
+                    _detail_row("市值貢獻度", _val(cs * 100, "%"))
+                    + _detail_row("日漲跌幅", _val(ret, "%"))
+                    + _detail_row("指數權重", '<span style="font-size:12px;font-weight:700;color:' + T["text_p"] + ';">' + (f"{w:.3f}%" if w is not None else "—") + '</span>')
+                )
+            elif sort_mode == "dist":
+                d50  = row_data.get("dist_50")
+                d200 = row_data.get("dist_200")
+                a50  = row_data.get("above_50")
+                a200 = row_data.get("above_200")
+                def _above_badge(flag):
+                    if flag is None: return '<span style="color:' + T["text_dim"] + ';">—</span>'
+                    if flag:
+                        return '<span style="font-size:11px;font-weight:700;padding:1px 6px;border-radius:3px;background:' + T["green"] + '22;color:' + T["green"] + ';">高於均線</span>'
+                    return '<span style="font-size:11px;font-weight:700;padding:1px 6px;border-radius:3px;background:' + T["red"] + '22;color:' + T["red"] + ';">低於均線</span>'
+                detail_html = (
+                    _detail_row("距 50日均線", _val(d50, "%"))
+                    + _detail_row("50日均線位置", _above_badge(a50))
+                    + _detail_row("距 200日均線", _val(d200, "%"))
+                    + _detail_row("200日均線位置", _above_badge(a200))
+                )
+            else:  # signal
+                s50  = int(row_data.get("signal_50",  0) or 0)
+                s200 = int(row_data.get("signal_200", 0) or 0)
+                d50  = row_data.get("dist_50")
+                d200 = row_data.get("dist_200")
+                detail_html = (
+                    _detail_row("50日均線訊號", signal_tag(s50, 0))
+                    + _detail_row("200日均線訊號", signal_tag(0, s200))
+                    + _detail_row("距 50日均線", _val(d50, "%"))
+                    + _detail_row("距 200日均線", _val(d200, "%"))
+                )
+
+            lookup_html = (
+                '<div style="margin-bottom:8px;">'
+                '<span style="font-size:15px;font-weight:800;color:' + T["text_h"] + ';">' + resolved_symbol + '</span>'
+                '<span style="font-size:10px;color:' + T["text_dim"] + ';margin-left:6px;">' + company_name + '</span>'
+                '</div>'
+                '<div style="display:flex;gap:4px;padding-bottom:10px;border-bottom:1px solid ' + T["border"] + ';margin-bottom:10px;">'
+                + _rank_cell(r_contrib, total_contrib, "市值貢獻")
+                + '<div style="width:1px;background:' + T["border"] + ';margin:4px 0;"></div>'
+                + _rank_cell(r_dist, total_dist, "距均線")
+                + '<div style="width:1px;background:' + T["border"] + ';margin:4px 0;"></div>'
+                + _rank_cell(r_signal, total_signal, "突破訊號")
+                + '</div>'
+                + detail_html
+            )
+            card(lookup_html, pad="12px 14px")
+        elif len(ticker_input) > 0 and resolved_symbol is None and not (
+            df_all["symbol"].str.contains(q_upper, case=False, na=False).any() or
+            df_all["company"].str.contains(ticker_input, case=False, na=False).any()
+        ):
+            not_found_html = (
+                '<span style="font-size:12px;color:' + T["red"] + ';">'
+                '查無符合「' + ticker_input + '」的成分股</span>'
+            )
+            card(not_found_html, pad="10px 14px")
 
     # 排行榜排序按鈕
     sort_labels = {"contrib": "市值貢獻", "dist": "距均線", "signal": "突破訊號"}
