@@ -27,9 +27,12 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-st.session_state.setdefault("sort_mode", "contrib")
-st.session_state.setdefault("time_range", "5Y")
-st.session_state["theme"] = "dark"
+_DESIGN_VER = "omega-v1"
+if st.session_state.get("_design_ver") != _DESIGN_VER:
+    st.session_state["theme"]       = "dark"
+    st.session_state["sort_mode"]   = "contrib"
+    st.session_state["time_range"]  = "5Y"
+    st.session_state["_design_ver"] = _DESIGN_VER
 
 T       = DARK if st.session_state.theme == "dark" else LIGHT
 is_dark = st.session_state.theme == "dark"
