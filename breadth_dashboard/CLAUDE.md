@@ -40,8 +40,11 @@ modules/
 - `diskcache` (SQLite-backed, `./cache/`) — TTL 24 hr for prices, 7 days for market caps.
 - `@st.cache_resource` wraps `load_all_data()` in `app.py` — Streamlit skips it on re-renders.
 - First run downloads ~503 tickers × 20 years (5–10 min). Subsequent runs load from cache instantly.
-- "↻ 更新" button calls `cache.clear_all()` then `st.rerun()`.
-- `st.cache_resource` (not `st.cache_data`) is used because the result includes a diskcache object that cannot be serialised.
+- Both cache layers must be cleared together to force a refresh:
+  ```python
+  cache.clear_all(); st.cache_resource.clear(); st.rerun()
+  ```
+  Clearing only `diskcache` has no effect because Streamlit still serves the in-memory copy.
 
 ## Key Config Values (`config.py`)
 
@@ -59,7 +62,7 @@ Two theme dicts in `config.py`: `DARK`, `LIGHT`. Default theme is **light**.
 
 `app.py` reads `st.session_state.theme`, selects `T = DARK or LIGHT`, and injects all colours via a single `st.markdown("<style>…</style>")` block. Charts are rebuilt via `plot_base()` which reads from `T`.
 
-Theme is toggled with **two explicit buttons** (`btn_light` / `btn_dark`), each showing `✓` when active. Default session-state values: `theme="light"`, `time_range="5Y"`.
+Theme is toggled with **two buttons** (`btn_light` / `btn_dark`) placed beside the indicator panel (not in the header — the header scrolls out of view). Default session-state values: `theme="light"`, `time_range="5Y"`, `sort_mode="contrib"`.
 
 ### Colour Key Reference
 
@@ -81,11 +84,29 @@ All HTML in `app.py` is built by **string concatenation**, not f-strings with em
 html = '<div style="color:' + T["red"] + ';">text</div>'
 
 # WRONG — nested f-string with mixed quotes silently corrupts HTML
-html = f'<div style="color:{T["red"]};">text</div>'  # works
 html = f'<div style="{f"color:{T[\"red\"]}"}">text</div>'  # corrupts
 ```
 
-The existing code mixes both styles in some places; the rule is: never nest an f-string inside another f-string with mixed quote styles.
+## Page Layout
+
+```
+Title (S&P 500 Breadth · live dot)
+──────────────────────────────────────────────────────────────────
+Indicator panel (full-width card)     [淺色] [深色] [↻ 更新]
+  "資料截至 YYYY-MM-DD"  [資料非最新 badge if stale]
+  Row: 50日市場寬度  ── label + value(20px bold) + bar + dot
+  Row: 200日市場寬度 ── same
+──────────────────────────────────────────────────────────────────
+Left col [3]                    Right col [1]
+  Time-range buttons              Sort buttons
+  Breadth chart (620 px)          Top-10 ranking table
+  Sector bar chart (50MA %)       Sector multi-period table
+                                    (5日 / 20日 / 50日 % above 50MA)
+```
+
+- `indicators_html(val50, val200)` renders both breadth bars as a single flex row; dot position clamped to `[2, 98]%`.
+- `data_date` is taken from `history.index[-1]`, not `date.today()` — reflects actual last trading day.
+- "資料非最新" orange badge appears when `data_date < today`.
 
 ## Chart Architecture (`app.py`)
 
@@ -99,29 +120,22 @@ The main breadth chart uses a **layered trace stack** (order matters):
 3. 50 MA area fill (`fill="tozeroy"`, `fillcolor=T["blue_fill"]`)
 4. Three `add_hline` reference lines (85%, 15%, 50%)
 5. 50 MA **glow backing trace** — thick width, `color=T["line_50_glow"]`, `hoverinfo="skip"`
-6. 50 MA **main line** — `width=2`, solid
+6. 50 MA **main line** — `width=2`, `customdata=[day_change, 20d_avg]`, rich hovertemplate
 7. 200 MA **glow backing trace** — `color=T["line_200_glow"]`, `hoverinfo="skip"`
-8. 200 MA **main line** — `width=1.4`, `dash="dot"`
+8. 200 MA **main line** — `width=1.4`, `dash="dot"`, same customdata pattern
 9. `add_annotation` for current values (top-left, `xref="paper"`, `yref="paper"`)
 
 The y-axis is `fixedrange=True` (only horizontal pan/zoom allowed). `scrollZoom=True` is passed in `config={}` to `st.plotly_chart`.
 
-## Page Layout
+## `breadth_calc.py` Functions
 
-```
-Header (title · live dot · date)         [淺色 ✓] [深色] [↻ 更新]
-─────────────────────────────────────────────────────────────────
-Indicator panel (full-width card)  ← indicators_html(cur50, cur200)
-  Row 1: 50日市場寬度  — label + value + thin bar + zone labels
-  Row 2: 200日市場寬度 — same structure
-─────────────────────────────────────────────────────────────────
-Left col [3]                    Right col [1]
-  Time-range buttons              Sort buttons
-  Breadth chart (620 px)          Top-10 ranking table
-  Sector bar chart                Recent breakout signals
-```
-
-Current values (50 MA and 200 MA) are shown as `add_annotation` inside the chart (top-left corner) **and** in the indicator panel above.
+| Function | Output |
+|---|---|
+| `calc_breadth_history(prices)` | Daily `above_50`, `above_200` % history |
+| `calc_stock_metrics(prices, constituents)` | Per-stock metrics: dist_50/200, signals, contrib_score |
+| `calc_sector_breadth(stock_metrics)` | Current sector 50/200 MA % |
+| `calc_sector_breadth_multiperiod(prices, constituents, periods)` | Sector % above 50MA at N days ago (default: 5, 20, 50) |
+| `get_extreme_stats(history)` | All-time high/low values and dates |
 
 ## Important Quirks
 
@@ -129,5 +143,4 @@ Current values (50 MA and 200 MA) are shown as `add_annotation` inside the chart
 - yfinance multi-ticker `download()` returns a `MultiIndex` columns DataFrame; `market_data.py` extracts only the `"Close"` level.
 - Ticker symbols with `.` (e.g. `BRK.B`) are normalised to `-` (`BRK-B`) for yfinance compatibility.
 - `calc_stock_metrics` detects breakout/breakdown signals over a rolling 5-day window, not just the current day.
-- `indicators_html(val50, val200)` renders both breadth indicators as compact rows; dot position is clamped to `[2, 98]%` to prevent clipping outside the bar's rounded corners. It replaced the old `signal_compact_html()` which showed only 50d with a large number.
 - Plotly annotation `text` accepts limited HTML-like markup (bold via `<b>`), but not full HTML.
