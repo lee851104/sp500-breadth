@@ -177,35 +177,21 @@ is_stale  = (not history.empty) and (data_date < today_str)
 # ═══════════════════════════════════════════════════════════════
 # 頂部列
 # ═══════════════════════════════════════════════════════════════
-hdr_l, hdr_r = st.columns([5, 2])
-
-with hdr_l:
-    st.markdown(
-        '<div style="display:flex;align-items:center;gap:10px;padding:12px 0 6px;">'
-        '<span style="font-size:14px;font-weight:700;letter-spacing:.06em;'
-        'text-transform:uppercase;color:' + T["text_h"] + ';">S&amp;P 500 Breadth</span>'
-        '<span style="width:7px;height:7px;border-radius:50%;background:' + T["green"] + ';'
-        'display:inline-block;animation:blink 2s infinite;"></span>'
-        '</div>', unsafe_allow_html=True)
-
-with hdr_r:
-    c1, c2 = st.columns(2)
-    with c1:
-        lbl_light = ("✓ " if not is_dark else "") + "淺色"
-        if st.button(lbl_light, key="btn_light"):
-            st.session_state.theme = "light"; st.rerun()
-    with c2:
-        lbl_dark = ("✓ " if is_dark else "") + "深色"
-        if st.button(lbl_dark, key="btn_dark"):
-            st.session_state.theme = "dark"; st.rerun()
+st.markdown(
+    '<div style="display:flex;align-items:center;gap:10px;padding:12px 0 6px;">'
+    '<span style="font-size:14px;font-weight:700;letter-spacing:.06em;'
+    'text-transform:uppercase;color:' + T["text_h"] + ';">S&amp;P 500 Breadth</span>'
+    '<span style="width:7px;height:7px;border-radius:50%;background:' + T["green"] + ';'
+    'display:inline-block;animation:blink 2s infinite;"></span>'
+    '</div>', unsafe_allow_html=True)
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════
-# 指標面板 + 資料日期 + 更新按鈕
+# 指標面板 + 日期 + 主題切換 + 更新按鈕（同一列）
 # ═══════════════════════════════════════════════════════════════
 sig_html = indicators_html(cur50, cur200)
-ind_col, btn_col = st.columns([5, 1], gap="small")
+ind_col, b1, b2, b3 = st.columns([5, 1, 1, 1], gap="small")
 
 with ind_col:
     if sig_html:
@@ -221,9 +207,21 @@ with ind_col:
         )
         card(date_row + sig_html, pad="10px 16px")
 
-with btn_col:
+with b1:
     st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
-    if st.button("↻ 更新資料", key="btn_refresh"):
+    lbl_light = ("✓ " if not is_dark else "") + "淺色"
+    if st.button(lbl_light, key="btn_light"):
+        st.session_state.theme = "light"; st.rerun()
+
+with b2:
+    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+    lbl_dark = ("✓ " if is_dark else "") + "深色"
+    if st.button(lbl_dark, key="btn_dark"):
+        st.session_state.theme = "dark"; st.rerun()
+
+with b3:
+    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+    if st.button("↻ 更新", key="btn_refresh"):
         cache.clear_all()
         st.cache_resource.clear()
         st.rerun()
