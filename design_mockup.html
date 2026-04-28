@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>美股市場儀表板 — 設計稿</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #1a1a2e; }
+
+  /* ── Layout ── */
+  .app { display: flex; height: 100vh; overflow: hidden; }
+  .sidebar { width: 220px; min-width: 220px; background: #fff; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; }
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar { background: #fff; border-bottom: 1px solid #e5e7eb; padding: 0 24px; height: 64px; display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+  .content { flex: 1; overflow-y: auto; padding: 24px; }
+
+  /* ── Sidebar ── */
+  .sidebar-logo { padding: 20px 20px 8px; border-bottom: 1px solid #f3f4f6; }
+  .sidebar-logo h1 { font-size: 16px; font-weight: 700; color: #1e40af; }
+  .sidebar-logo p { font-size: 11px; color: #6b7280; margin-top: 2px; }
+  .sidebar-nav { flex: 1; padding: 12px 0; }
+  .nav-section { padding: 8px 12px 4px; font-size: 10px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.08em; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 20px; cursor: pointer; font-size: 13.5px; color: #374151; border-left: 3px solid transparent; transition: all 0.15s; }
+  .nav-item:hover { background: #f3f4f6; color: #1e40af; }
+  .nav-item.active { background: #eff6ff; color: #1e40af; font-weight: 600; border-left-color: #1e40af; }
+  .nav-item .icon { width: 18px; text-align: center; font-size: 15px; }
+  .nav-badge { margin-left: auto; background: #dbeafe; color: #1e40af; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600; }
+  .sidebar-footer { padding: 16px 20px; border-top: 1px solid #f3f4f6; font-size: 11px; color: #9ca3af; }
+  .sidebar-footer span { color: #6b7280; }
+
+  /* ── TopBar ── */
+  .market-pill { display: flex; align-items: center; gap: 8px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 6px 14px; cursor: pointer; transition: all 0.15s; min-width: 130px; }
+  .market-pill:hover { border-color: #93c5fd; background: #eff6ff; }
+  .market-pill .name { font-size: 11px; color: #6b7280; font-weight: 500; }
+  .market-pill .value { font-size: 14px; font-weight: 700; color: #111827; }
+  .market-pill .change { font-size: 11px; font-weight: 600; }
+  .up { color: #16a34a; }
+  .down { color: #dc2626; }
+  .pill-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .pill-dot.up { background: #16a34a; }
+  .pill-dot.down { background: #dc2626; }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .last-update { font-size: 11px; color: #9ca3af; }
+  .btn-refresh { display: flex; align-items: center; gap: 6px; background: #1e40af; color: #fff; border: none; border-radius: 8px; padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+  .btn-refresh:hover { background: #1d4ed8; }
+  .btn-refresh.loading { background: #93c5fd; cursor: wait; }
+  .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Section ── */
+  .section-title { font-size: 13px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: #e5e7eb; }
+  .required-badge { font-size: 9px; background: #fef3c7; color: #92400e; padding: 1px 6px; border-radius: 4px; text-transform: none; letter-spacing: 0; font-weight: 700; }
+
+  /* ── Market Breadth (Top Hero Widget) ── */
+  .breadth-hero { background: #fff; border-radius: 14px; border: 1px solid #e5e7eb; padding: 24px; margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; align-items: center; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .breadth-main { grid-column: 1; }
+  .breadth-gauge-area { grid-column: 2 / 4; display: flex; flex-direction: column; align-items: center; }
+  .breadth-trend { grid-column: 4; }
+  .breadth-label { font-size: 11px; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .breadth-value { font-size: 48px; font-weight: 800; line-height: 1; color: #f59e0b; }
+  .breadth-desc { font-size: 12px; color: #6b7280; margin-top: 6px; }
+  .breadth-sub { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+  .breadth-sub-item { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+  .breadth-sub-item .lbl { color: #6b7280; }
+  .breadth-sub-item .val { font-weight: 700; }
+
+  /* Gauge SVG */
+  .gauge-wrap { position: relative; width: 200px; height: 110px; }
+  .gauge-wrap svg { width: 200px; height: 110px; }
+  .gauge-center-text { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); text-align: center; }
+  .gauge-center-text .big { font-size: 28px; font-weight: 800; }
+  .gauge-center-text .small { font-size: 11px; color: #6b7280; }
+
+  /* Mini Sparkline */
+  .spark { width: 100%; height: 60px; }
+
+  /* ── Index Cards Grid ── */
+  .cards-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+  .index-card { background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 16px; cursor: pointer; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .index-card:hover { border-color: #93c5fd; box-shadow: 0 4px 12px rgba(30,64,175,0.08); transform: translateY(-1px); }
+  .index-card.expanded { grid-column: span 2; border-color: #3b82f6; box-shadow: 0 4px 16px rgba(30,64,175,0.12); }
+  .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .card-ticker { font-size: 13px; font-weight: 700; color: #374151; }
+  .card-name { font-size: 10px; color: #9ca3af; margin-top: 1px; }
+  .card-badge { font-size: 10px; padding: 2px 7px; border-radius: 5px; font-weight: 600; }
+  .card-badge.above { background: #dcfce7; color: #15803d; }
+  .card-badge.below { background: #fee2e2; color: #b91c1c; }
+  .card-price { font-size: 22px; font-weight: 800; color: #111827; margin-bottom: 3px; }
+  .card-change { font-size: 12px; font-weight: 600; }
+  .card-ma-row { display: flex; gap: 10px; margin-top: 8px; }
+  .card-ma-pill { font-size: 10px; background: #f3f4f6; color: #6b7280; padding: 2px 7px; border-radius: 5px; }
+  .card-ma-pill span { font-weight: 700; }
+  .card-sparkline { margin-top: 10px; }
+  .expand-hint { font-size: 10px; color: #93c5fd; text-align: right; margin-top: 4px; }
+
+  /* ── Bottom Row ── */
+  .bottom-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+  .widget { background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .widget-title { font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+  .widget-sub { font-size: 10px; color: #9ca3af; font-weight: 400; }
+
+  /* Fear & Greed */
+  .fg-value { font-size: 40px; font-weight: 800; text-align: center; margin: 4px 0 2px; }
+  .fg-label { text-align: center; font-size: 12px; color: #6b7280; }
+  .fg-bar { height: 8px; border-radius: 4px; background: linear-gradient(90deg, #dc2626 0%, #f59e0b 50%, #16a34a 100%); position: relative; margin: 12px 0 6px; }
+  .fg-needle { position: absolute; width: 3px; height: 16px; background: #1a1a2e; border-radius: 2px; top: -4px; transform: translateX(-50%); }
+  .fg-ticks { display: flex; justify-content: space-between; font-size: 9px; color: #9ca3af; }
+
+  /* Sector Heatmap */
+  .heatmap { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+  .heatmap-cell { border-radius: 6px; padding: 7px 5px; text-align: center; cursor: pointer; transition: opacity 0.15s; }
+  .heatmap-cell:hover { opacity: 0.8; }
+  .heatmap-cell .ticker { font-size: 9px; font-weight: 700; color: rgba(255,255,255,0.85); }
+  .heatmap-cell .pct { font-size: 12px; font-weight: 800; color: #fff; }
+  .bg-green3 { background: #15803d; }
+  .bg-green2 { background: #16a34a; }
+  .bg-green1 { background: #4ade80; color: #14532d; }
+  .bg-green1 .ticker, .bg-green1 .pct { color: #14532d; }
+  .bg-red3 { background: #b91c1c; }
+  .bg-red2 { background: #dc2626; }
+  .bg-red1 { background: #fca5a5; }
+  .bg-red1 .ticker, .bg-red1 .pct { color: #7f1d1d; }
+
+  /* VIX + macro mini widgets */
+  .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f3f4f6; }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row .label { font-size: 12px; color: #6b7280; }
+  .stat-row .value { font-size: 13px; font-weight: 700; }
+  .stat-row .chg { font-size: 11px; font-weight: 600; margin-left: 6px; }
+
+  /* A/D & Breadth details row */
+  .breadth-detail-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+
+  /* ── Settings Panel ── */
+  .settings-panel { display: none; background: #fff; border-radius: 14px; border: 1px solid #e5e7eb; padding: 24px; }
+  .settings-panel.show { display: block; }
+  .settings-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 16px; }
+  .setting-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; border: 1px solid #e5e7eb; }
+  .setting-item.required { background: #eff6ff; border-color: #bfdbfe; }
+  .toggle { width: 36px; height: 20px; background: #d1d5db; border-radius: 10px; position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
+  .toggle.on { background: #3b82f6; }
+  .toggle::after { content: ''; position: absolute; width: 16px; height: 16px; background: #fff; border-radius: 50%; top: 2px; left: 2px; transition: left 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  .toggle.on::after { left: 18px; }
+  .setting-name { font-size: 13px; font-weight: 500; color: #374151; flex: 1; }
+  .setting-tag { font-size: 10px; color: #9ca3af; }
+  .lock-icon { color: #93c5fd; font-size: 13px; }
+
+  /* ── Detail Expanded Chart ── */
+  .detail-panel { background: #fff; border-radius: 12px; border: 2px solid #3b82f6; padding: 20px; margin-bottom: 20px; display: none; }
+  .detail-panel.show { display: block; }
+  .detail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .detail-header h2 { font-size: 18px; font-weight: 800; }
+  .detail-tabs { display: flex; gap: 8px; }
+  .tab { font-size: 11px; padding: 4px 12px; border-radius: 6px; border: 1px solid #e5e7eb; cursor: pointer; color: #6b7280; }
+  .tab.active { background: #1e40af; color: #fff; border-color: #1e40af; }
+  .legend { display: flex; gap: 16px; margin-bottom: 8px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #374151; }
+  .legend-dot { width: 10px; height: 3px; border-radius: 2px; }
+  .chart-placeholder { background: #f8fafc; border-radius: 8px; height: 200px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; }
+  .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  .stat-box { background: #f9fafb; border-radius: 8px; padding: 10px 12px; }
+  .stat-box .s-label { font-size: 10px; color: #9ca3af; margin-bottom: 3px; }
+  .stat-box .s-value { font-size: 15px; font-weight: 700; }
+
+  /* Page transitions */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* Tooltip */
+  .tooltip { position: fixed; background: #1a1a2e; color: #fff; font-size: 11px; padding: 6px 10px; border-radius: 6px; pointer-events: none; z-index: 1000; display: none; }
+
+  /* Notification */
+  .notif { position: fixed; bottom: 24px; right: 24px; background: #1e40af; color: #fff; border-radius: 10px; padding: 12px 20px; font-size: 13px; font-weight: 600; box-shadow: 0 4px 16px rgba(30,64,175,0.3); transform: translateY(100px); transition: transform 0.3s; z-index: 100; }
+  .notif.show { transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ── SIDEBAR ── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <h1>📈 美股儀表板</h1>
+      <p>US Market Dashboard</p>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">主要頁面</div>
+      <div class="nav-item active" onclick="showPage('overview', this)">
+        <span class="icon">🏠</span> 市場總覽
+      </div>
+      <div class="nav-item" onclick="showPage('breadth', this)">
+        <span class="icon">📊</span> 市場寬度
+        <span class="nav-badge">必要</span>
+      </div>
+      <div class="nav-item" onclick="showPage('sentiment', this)">
+        <span class="icon">😨</span> 情緒指標
+      </div>
+      <div class="nav-section">資產類別</div>
+      <div class="nav-item" onclick="showPage('indices', this)">
+        <span class="icon">📉</span> 大盤指數
+      </div>
+      <div class="nav-item" onclick="showPage('sectors', this)">
+        <span class="icon">🗺️</span> 區塊熱圖
+      </div>
+      <div class="nav-item" onclick="showPage('macro', this)">
+        <span class="icon">🌏</span> 宏觀資產
+      </div>
+      <div class="nav-item" onclick="showPage('rates', this)">
+        <span class="icon">💵</span> 利率殖利
+      </div>
+      <div class="nav-section">設定</div>
+      <div class="nav-item" onclick="showPage('settings', this)">
+        <span class="icon">⚙️</span> 客製化指標
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      上次更新<br>
+      <span>2025-04-11 16:02 EST</span>
+    </div>
+  </aside>
+
+  <!-- ── MAIN ── -->
+  <div class="main">
+    <!-- TopBar -->
+    <div class="topbar">
+      <!-- Quick market pills -->
+      <div class="market-pill" onclick="showPage('indices', document.querySelector('.nav-item:nth-child(5)'))">
+        <div class="pill-dot down"></div>
+        <div>
+          <div class="name">S&P 500</div>
+          <div class="value">5,123.41</div>
+        </div>
+        <div class="change down">▼ 1.57%</div>
+      </div>
+      <div class="market-pill" onclick="showPage('indices', document.querySelector('.nav-item:nth-child(5)'))">
+        <div class="pill-dot down"></div>
+        <div>
+          <div class="name">NASDAQ 100</div>
+          <div class="value">17,899.02</div>
+        </div>
+        <div class="change down">▼ 2.34%</div>
+      </div>
+      <div class="market-pill">
+        <div class="pill-dot down"></div>
+        <div>
+          <div class="name">Russell 2000</div>
+          <div class="value">1,891.22</div>
+        </div>
+        <div class="change down">▼ 0.88%</div>
+      </div>
+      <div class="market-pill">
+        <div class="pill-dot up"></div>
+        <div>
+          <div class="name">VIX</div>
+          <div class="value">32.14</div>
+        </div>
+        <div class="change up">▲ 18.2%</div>
+      </div>
+      <div class="market-pill">
+        <div class="pill-dot down"></div>
+        <div>
+          <div class="name">Fear &amp; Greed</div>
+          <div class="value">28</div>
+        </div>
+        <div class="change down" style="color:#b91c1c">極度恐慌</div>
+      </div>
+
+      <div class="topbar-right">
+        <span class="last-update">收盤資料 · 2025-04-11 16:00 EST</span>
+        <button class="btn-refresh" onclick="simulateRefresh(this)">
+          <div class="spinner" id="spinner"></div>
+          ⟳ 更新資料
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Content ── -->
+    <div class="content">
+
+      <!-- ======== PAGE: Overview ======== -->
+      <div class="page active" id="page-overview">
+
+        <!-- Market Breadth Hero (固定第一) -->
+        <div class="section-title">
+          市場寬度（Market Breadth）
+          <span class="required-badge">必要指標</span>
+        </div>
+        <div class="breadth-hero" style="cursor:pointer" onclick="showDetailPanel('breadth-detail')">
+          <!-- Left: main number -->
+          <div class="breadth-main">
+            <div class="breadth-label">S&amp;P500 個股在 200MA 上</div>
+            <div class="breadth-value">42%</div>
+            <div class="breadth-desc" style="color:#dc2626">⚠ 市場偏弱，多數個股破底</div>
+            <div class="breadth-sub">
+              <div class="breadth-sub-item">
+                <span class="lbl">在 50MA 上</span>
+                <span class="val" style="color:#f59e0b">38%</span>
+              </div>
+              <div class="breadth-sub-item">
+                <span class="lbl">在 20MA 上</span>
+                <span class="val" style="color:#dc2626">29%</span>
+              </div>
+              <div class="breadth-sub-item">
+                <span class="lbl">A/D 線</span>
+                <span class="val" style="color:#dc2626">↘ -2,341</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Center: Gauge -->
+          <div class="breadth-gauge-area">
+            <div class="gauge-wrap">
+              <!-- SVG Half-circle gauge -->
+              <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg">
+                <!-- Track -->
+                <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#f3f4f6" stroke-width="18" stroke-linecap="round"/>
+                <!-- Fill (42% = ~75.6 deg from left) -->
+                <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#grad)" stroke-width="18" stroke-linecap="round" stroke-dasharray="251.2" stroke-dashoffset="145.7"/>
+                <defs>
+                  <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:#dc2626"/>
+                    <stop offset="50%" style="stop-color:#f59e0b"/>
+                    <stop offset="100%" style="stop-color:#16a34a"/>
+                  </linearGradient>
+                </defs>
+                <!-- Needle -->
+                <line x1="100" y1="100" x2="56" y2="58" stroke="#1a1a2e" stroke-width="3" stroke-linecap="round"/>
+                <circle cx="100" cy="100" r="6" fill="#1a1a2e"/>
+                <!-- Labels -->
+                <text x="16" y="118" font-size="9" fill="#9ca3af">0</text>
+                <text x="92" y="22" font-size="9" fill="#9ca3af">50</text>
+                <text x="178" y="118" font-size="9" fill="#9ca3af">100</text>
+              </svg>
+              <div class="gauge-center-text">
+                <div class="big" style="color:#f59e0b">42%</div>
+                <div class="small">市場寬度</div>
+              </div>
+            </div>
+            <div style="font-size:11px;color:#6b7280;margin-top:8px">點擊查看詳細歷史走勢 →</div>
+          </div>
+
+          <!-- Right: 52-week highs/lows + trend -->
+          <div class="breadth-trend">
+            <div class="breadth-label">NYSE 52週高低</div>
+            <div style="display:flex;gap:16px;margin-bottom:12px">
+              <div>
+                <div style="font-size:10px;color:#16a34a;font-weight:600">新高</div>
+                <div style="font-size:24px;font-weight:800;color:#16a34a">47</div>
+              </div>
+              <div style="font-size:24px;line-height:2;color:#d1d5db">/</div>
+              <div>
+                <div style="font-size:10px;color:#dc2626;font-weight:600">新低</div>
+                <div style="font-size:24px;font-weight:800;color:#dc2626">312</div>
+              </div>
+            </div>
+            <div class="breadth-label" style="margin-top:4px">市場趨勢（近4週）</div>
+            <svg class="spark" viewBox="0 0 150 50" xmlns="http://www.w3.org/2000/svg">
+              <polyline points="0,30 25,35 50,45 75,40 100,38 125,42 150,45" fill="none" stroke="#dc2626" stroke-width="2.5" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Detail Panel for Breadth (hidden, expands on click) -->
+        <div class="detail-panel" id="breadth-detail">
+          <div class="detail-header">
+            <div>
+              <h2>市場寬度 — 詳細走勢</h2>
+              <div style="font-size:12px;color:#6b7280">S&P 500 個股在各均線上方比例（^SPXA200R）</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <div class="detail-tabs">
+                <div class="tab active">1M</div>
+                <div class="tab">3M</div>
+                <div class="tab">6M</div>
+                <div class="tab">1Y</div>
+              </div>
+              <button onclick="hideDetailPanel('breadth-detail')" style="background:none;border:none;cursor:pointer;font-size:18px;color:#9ca3af">✕</button>
+            </div>
+          </div>
+          <div class="legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#1e40af;height:3px"></div> 200日均線上%</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f59e0b;height:3px"></div> 50日均線上%</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#dc2626;height:3px"></div> 20日均線上%</div>
+          </div>
+          <!-- Chart placeholder (real chart uses recharts) -->
+          <div class="chart-placeholder">
+            <svg viewBox="0 0 600 180" width="100%" xmlns="http://www.w3.org/2000/svg">
+              <!-- 200MA line (blue) -->
+              <polyline points="0,80 60,70 120,60 180,75 240,90 300,95 360,100 420,110 480,105 540,108 600,120" fill="none" stroke="#1e40af" stroke-width="2.5" stroke-linejoin="round"/>
+              <!-- 50MA line (amber) -->
+              <polyline points="0,95 60,88 120,80 180,90 240,110 300,120 360,130 420,140 480,132 540,138 600,148" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linejoin="round" stroke-dasharray="4,2"/>
+              <!-- 20MA line (red) -->
+              <polyline points="0,100 60,95 120,100 180,115 240,130 300,145 360,155 420,165 480,155 540,162 600,170" fill="none" stroke="#dc2626" stroke-width="2" stroke-linejoin="round" stroke-dasharray="2,2"/>
+              <!-- Y axis labels -->
+              <text x="8" y="20" font-size="10" fill="#9ca3af">80%</text>
+              <text x="8" y="70" font-size="10" fill="#9ca3af">60%</text>
+              <text x="8" y="120" font-size="10" fill="#9ca3af">40%</text>
+              <text x="8" y="170" font-size="10" fill="#9ca3af">20%</text>
+              <!-- Reference line 50% -->
+              <line x1="30" y1="100" x2="600" y2="100" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="4,4"/>
+              <text x="572" y="97" font-size="9" fill="#9ca3af">50%</text>
+            </svg>
+          </div>
+          <div class="stats-row">
+            <div class="stat-box"><div class="s-label">目前 (200MA)</div><div class="s-value" style="color:#f59e0b">42%</div></div>
+            <div class="stat-box"><div class="s-label">1個月前</div><div class="s-value">61%</div></div>
+            <div class="stat-box"><div class="s-label">52週高點</div><div class="s-value" style="color:#16a34a">89%</div></div>
+            <div class="stat-box"><div class="s-label">52週低點</div><div class="s-value" style="color:#dc2626">38%</div></div>
+            <div class="stat-box"><div class="s-label">歷史均值</div><div class="s-value">58%</div></div>
+          </div>
+        </div>
+
+        <!-- 4 Index Cards -->
+        <div class="section-title">大盤指數（點擊展開走勢圖）</div>
+        <div class="cards-grid" id="cards-grid">
+
+          <div class="index-card" onclick="toggleCard(this, 'spy-detail')">
+            <div class="card-header">
+              <div><div class="card-ticker">SPY</div><div class="card-name">S&amp;P 500 ETF</div></div>
+              <span class="card-badge below">200MA ↓2.3%</span>
+            </div>
+            <div class="card-price down">$513.24</div>
+            <div class="card-change down">▼ $8.21 (-1.57%)</div>
+            <div class="card-ma-row">
+              <div class="card-ma-pill">50MA <span>$531.10</span></div>
+              <div class="card-ma-pill">200MA <span>$524.88</span></div>
+            </div>
+            <div class="card-sparkline">
+              <svg class="spark" viewBox="0 0 120 40" xmlns="http://www.w3.org/2000/svg">
+                <polyline points="0,10 20,8 40,12 60,15 80,14 100,25 120,30" fill="none" stroke="#dc2626" stroke-width="2" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <div class="expand-hint">▾ 點擊展開詳細圖表</div>
+          </div>
+
+          <div class="index-card" onclick="toggleCard(this, 'qqq-detail')">
+            <div class="card-header">
+              <div><div class="card-ticker">QQQ</div><div class="card-name">NASDAQ 100 ETF</div></div>
+              <span class="card-badge below">200MA ↓4.1%</span>
+            </div>
+            <div class="card-price down">$428.17</div>
+            <div class="card-change down">▼ $10.26 (-2.34%)</div>
+            <div class="card-ma-row">
+              <div class="card-ma-pill">50MA <span>$460.55</span></div>
+              <div class="card-ma-pill">200MA <span>$446.61</span></div>
+            </div>
+            <div class="card-sparkline">
+              <svg class="spark" viewBox="0 0 120 40" xmlns="http://www.w3.org/2000/svg">
+                <polyline points="0,5 20,8 40,10 60,18 80,20 100,30 120,35" fill="none" stroke="#dc2626" stroke-width="2" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <div class="expand-hint">▾ 點擊展開詳細圖表</div>
+          </div>
+
+          <div class="index-card" onclick="toggleCard(this, 'iwm-detail')">
+            <div class="card-header">
+              <div><div class="card-ticker">IWM</div><div class="card-name">Russell 2000 ETF</div></div>
+              <span class="card-badge below">200MA ↓8.2%</span>
+            </div>
+            <div class="card-price down">$188.44</div>
+            <div class="card-change down">▼ $1.67 (-0.88%)</div>
+            <div class="card-ma-row">
+              <div class="card-ma-pill">50MA <span>$205.30</span></div>
+              <div class="card-ma-pill">200MA <span>$205.35</span></div>
+            </div>
+            <div class="card-sparkline">
+              <svg class="spark" viewBox="0 0 120 40" xmlns="http://www.w3.org/2000/svg">
+                <polyline points="0,5 20,12 40,8 60,20 80,25 100,28 120,32" fill="none" stroke="#dc2626" stroke-width="2" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <div class="expand-hint">▾ 點擊展開詳細圖表</div>
+          </div>
+
+          <div class="index-card" onclick="toggleCard(this, 'dia-detail')">
+            <div class="card-header">
+              <div><div class="card-ticker">DIA</div><div class="card-name">Dow Jones ETF</div></div>
+              <span class="card-badge below">200MA ↓1.8%</span>
+            </div>
+            <div class="card-price down">$381.20</div>
+            <div class="card-change down">▼ $4.83 (-1.25%)</div>
+            <div class="card-ma-row">
+              <div class="card-ma-pill">50MA <span>$401.15</span></div>
+              <div class="card-ma-pill">200MA <span>$388.29</span></div>
+            </div>
+            <div class="card-sparkline">
+              <svg class="spark" viewBox="0 0 120 40" xmlns="http://www.w3.org/2000/svg">
+                <polyline points="0,8 20,7 40,9 60,14 80,16 100,22 120,26" fill="none" stroke="#dc2626" stroke-width="2" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <div class="expand-hint">▾ 點擊展開詳細圖表</div>
+          </div>
+        </div>
+
+        <!-- Expanded index detail (hidden) -->
+        <div class="detail-panel" id="spy-detail">
+          <div class="detail-header">
+            <div>
+              <h2>SPY — S&amp;P 500 ETF</h2>
+              <div style="font-size:12px;color:#6b7280">收盤 $513.24 &nbsp;▼ -1.57% &nbsp;|&nbsp; 目前在200MA <span style="color:#dc2626">下方 2.3%</span></div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <div class="detail-tabs">
+                <div class="tab">1M</div><div class="tab active">3M</div><div class="tab">6M</div><div class="tab">1Y</div>
+              </div>
+              <button onclick="hideDetailPanel('spy-detail')" style="background:none;border:none;cursor:pointer;font-size:18px;color:#9ca3af">✕</button>
+            </div>
+          </div>
+          <div class="legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div> 收盤價</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div> 50日均線</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div> 200日均線</div>
+          </div>
+          <div class="chart-placeholder">
+            <svg viewBox="0 0 600 180" width="100%" xmlns="http://www.w3.org/2000/svg">
+              <!-- Price line -->
+              <polyline points="0,30 60,25 120,20 180,35 240,60 300,80 360,90 420,75 480,100 540,110 600,120" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linejoin="round"/>
+              <!-- 50MA -->
+              <polyline points="0,55 60,50 120,48 180,55 240,70 300,85 360,90 420,88 480,98 540,105 600,110" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linejoin="round" stroke-dasharray="5,3"/>
+              <!-- 200MA -->
+              <line x1="0" y1="100" x2="600" y2="100" stroke="#ef4444" stroke-width="2" stroke-dasharray="6,3"/>
+              <text x="570" y="96" font-size="10" fill="#ef4444">200MA</text>
+              <!-- Volume bars at bottom -->
+              <rect x="0" y="158" width="8" height="22" fill="#dbeafe" opacity="0.8"/>
+              <rect x="12" y="155" width="8" height="25" fill="#dbeafe" opacity="0.8"/>
+              <rect x="24" y="160" width="8" height="20" fill="#dbeafe" opacity="0.8"/>
+              <rect x="36" y="150" width="8" height="30" fill="#fee2e2" opacity="0.8"/>
+              <rect x="48" y="148" width="8" height="32" fill="#fee2e2" opacity="0.8"/>
+            </svg>
+          </div>
+          <div class="stats-row">
+            <div class="stat-box"><div class="s-label">收盤價</div><div class="s-value">$513.24</div></div>
+            <div class="stat-box"><div class="s-label">50日均線</div><div class="s-value">$531.10</div></div>
+            <div class="stat-box"><div class="s-label">200日均線</div><div class="s-value">$524.88</div></div>
+            <div class="stat-box"><div class="s-label">vs 200MA</div><div class="s-value" style="color:#dc2626">-2.3%</div></div>
+            <div class="stat-box"><div class="s-label">52週高點</div><div class="s-value">$613.23</div></div>
+          </div>
+        </div>
+        <div class="detail-panel" id="qqq-detail" style="display:none">
+          <div class="detail-header">
+            <h2>QQQ — NASDAQ 100 ETF (展開後顯示詳細圖)</h2>
+            <button onclick="hideDetailPanel('qqq-detail')" style="background:none;border:none;cursor:pointer;font-size:18px;color:#9ca3af">✕</button>
+          </div>
+          <div style="color:#6b7280;font-size:13px;padding:20px 0">實際專案中此處顯示完整歷史K線 + 均線圖表（使用 recharts）</div>
+        </div>
+        <div class="detail-panel" id="iwm-detail" style="display:none">
+          <div class="detail-header">
+            <h2>IWM — Russell 2000</h2>
+            <button onclick="hideDetailPanel('iwm-detail')" style="background:none;border:none;cursor:pointer;font-size:18px;color:#9ca3af">✕</button>
+          </div>
+          <div style="color:#6b7280;font-size:13px;padding:20px 0">實際專案中此處顯示完整歷史K線 + 均線圖表（使用 recharts）</div>
+        </div>
+        <div class="detail-panel" id="dia-detail" style="display:none">
+          <div class="detail-header">
+            <h2>DIA — Dow Jones</h2>
+            <button onclick="hideDetailPanel('dia-detail')" style="background:none;border:none;cursor:pointer;font-size:18px;color:#9ca3af">✕</button>
+          </div>
+          <div style="color:#6b7280;font-size:13px;padding:20px 0">實際專案中此處顯示完整歷史K線 + 均線圖表（使用 recharts）</div>
+        </div>
+
+        <!-- Bottom 3-col row -->
+        <div class="section-title">情緒 &amp; 區塊概覽</div>
+        <div class="bottom-grid">
+
+          <!-- Fear & Greed -->
+          <div class="widget">
+            <div class="widget-title">CNN Fear &amp; Greed Index <span class="widget-sub">即時更新</span></div>
+            <div class="fg-value" style="color:#dc2626">28</div>
+            <div class="fg-label" style="color:#dc2626;font-weight:700">極度恐慌 (Extreme Fear)</div>
+            <div class="fg-bar" style="margin-top:14px">
+              <div class="fg-needle" style="left:28%"></div>
+            </div>
+            <div class="fg-ticks">
+              <span>極恐</span><span>恐慌</span><span>中性</span><span>貪婪</span><span>極貪</span>
+            </div>
+            <div class="breadth-sub" style="margin-top:12px">
+              <div class="breadth-sub-item"><span class="lbl">VIX（恐慌）</span><span class="val down">32.1 ↑</span></div>
+              <div class="breadth-sub-item"><span class="lbl">Put/Call Ratio</span><span class="val down">1.42 ↑</span></div>
+              <div class="breadth-sub-item"><span class="lbl">前一週 F&amp;G</span><span class="val" style="color:#f59e0b">44</span></div>
+            </div>
+          </div>
+
+          <!-- Sector Heatmap -->
+          <div class="widget">
+            <div class="widget-title">區塊表現熱圖 <span class="widget-sub">今日漲跌%</span></div>
+            <div class="heatmap">
+              <div class="heatmap-cell bg-red3"><div class="ticker">XLK</div><div class="pct">-2.8%</div></div>
+              <div class="heatmap-cell bg-red2"><div class="ticker">XLC</div><div class="pct">-1.9%</div></div>
+              <div class="heatmap-cell bg-red1"><div class="ticker">XLY</div><div class="pct">-0.9%</div></div>
+              <div class="heatmap-cell bg-red2"><div class="ticker">XLF</div><div class="pct">-1.5%</div></div>
+              <div class="heatmap-cell bg-red1"><div class="ticker">XLI</div><div class="pct">-0.7%</div></div>
+              <div class="heatmap-cell bg-green1"><div class="ticker">XLV</div><div class="pct">+0.4%</div></div>
+              <div class="heatmap-cell bg-red1"><div class="ticker">XLB</div><div class="pct">-0.5%</div></div>
+              <div class="heatmap-cell bg-green2"><div class="ticker">XLU</div><div class="pct">+1.2%</div></div>
+              <div class="heatmap-cell bg-green1"><div class="ticker">XLP</div><div class="pct">+0.3%</div></div>
+              <div class="heatmap-cell bg-red3"><div class="ticker">XLE</div><div class="pct">-3.1%</div></div>
+              <div class="heatmap-cell bg-red1"><div class="ticker">XLRE</div><div class="pct">-0.6%</div></div>
+              <div class="heatmap-cell" style="background:#f3f4f6;display:flex;align-items:center;justify-content:center"><div style="font-size:9px;color:#9ca3af;text-align:center">11 Sectors<br>全覽 →</div></div>
+            </div>
+          </div>
+
+          <!-- Macro quick stats -->
+          <div class="widget">
+            <div class="widget-title">宏觀資產快覽 <span class="widget-sub">收盤價</span></div>
+            <div class="stat-row"><span class="label">10年期殖利率</span><div><span class="value">4.41%</span><span class="chg down">▼ 0.08</span></div></div>
+            <div class="stat-row"><span class="label">2Y/10Y 利差</span><div><span class="value" style="color:#f59e0b">+0.22%</span><span class="chg up">↗ 正向</span></div></div>
+            <div class="stat-row"><span class="label">美元指數 DXY</span><div><span class="value">100.84</span><span class="chg down">▼ 0.6%</span></div></div>
+            <div class="stat-row"><span class="label">黃金 GLD</span><div><span class="value">$3,238</span><span class="chg up">▲ +0.9%</span></div></div>
+            <div class="stat-row"><span class="label">原油 CL=F</span><div><span class="value">$61.53</span><span class="chg down">▼ 2.3%</span></div></div>
+            <div class="stat-row"><span class="label">Bitcoin</span><div><span class="value">$79,840</span><span class="chg down">▼ 3.4%</span></div></div>
+          </div>
+        </div>
+
+      </div><!-- /page-overview -->
+
+      <!-- ======== PAGE: Settings ======== -->
+      <div class="page" id="page-settings">
+        <div class="section-title">客製化指標顯示</div>
+        <div style="font-size:13px;color:#6b7280;margin-bottom:16px">選擇你想在儀表板中顯示的指標。市場寬度為必要指標，無法關閉。</div>
+        <div class="settings-panel show">
+          <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">📊 市場寬度（必要）</div>
+          <div class="settings-grid">
+            <div class="setting-item required">
+              <div class="toggle on" style="cursor:not-allowed;opacity:0.6"></div>
+              <div><div class="setting-name">市場寬度 (^SPXA200R)</div><div class="setting-tag">固定顯示，無法關閉</div></div>
+              <span class="lock-icon">🔒</span>
+            </div>
+            <div class="setting-item">
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div><div class="setting-name">漲跌差線 A/D Line</div><div class="setting-tag">^NYAD</div></div>
+            </div>
+            <div class="setting-item">
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div><div class="setting-name">新52週高/低</div><div class="setting-tag">^NYHGH / ^NYLOW</div></div>
+            </div>
+          </div>
+          <div style="font-size:12px;font-weight:700;color:#374151;margin:16px 0 8px">😨 情緒指標</div>
+          <div class="settings-grid">
+            <div class="setting-item">
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div><div class="setting-name">CNN Fear &amp; Greed Index</div><div class="setting-tag">CNN API · 即時</div></div>
+            </div>
+            <div class="setting-item">
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div><div class="setting-name">VIX 恐慌指數</div><div class="setting-tag">^VIX · yfinance</div></div>
+            </div>
+            <div class="setting-item">
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div><div class="setting-name">AAII 散戶情緒</div><div class="setting-tag">週更 · 爬蟲</div></div>
+            </div>
+            <div class="setting-item">
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div><div class="setting-name">Put/Call Ratio</div><div class="setting-tag">^PCALL · yfinance</div></div>
+            </div>
+          </div>
+          <div style="font-size:12px;font-weight:700;color:#374151;margin:16px 0 8px">📉 大盤指數</div>
+          <div class="settings-grid">
+            <div class="setting-item">
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div><div class="setting-name">S&P 500 (SPY) + MA</div><div class="setting-tag">yfinance</div></div>
+            </div>
+            <div class="setting-item">
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div><div class="setting-name">NASDAQ 100 (QQQ) + MA</div><div class="setting-tag">yfinance</div></div>
+            </div>
+            <div class="setting-item">
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div><div class="setting-name">Russell 2000 (IWM)</div><div class="setting-tag">yfinance</div></div>
+            </div>
+            <div class="setting-item">
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div><div class="setting-name">Dow Jones (DIA)</div><div class="setting-tag">yfinance</div></div>
+            </div>
+            <div class="setting-item">
+              <div class="toggle" onclick="this.classList.toggle('on')"></div>
+              <div><div class="setting-name">SPY 成交量 vs 50日均量</div><div class="setting-tag">yfinance 計算</div></div>
+            </div>
+          </div>
+          <div style="font-size:12px;font-weight:700;color:#374151;margin:16px 0 8px">💵 固定收益</div>
+          <div class="settings-grid">
+            <div class="setting-item">
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div><div class="setting-name">10年期殖利率</div><div class="setting-tag">^TNX</div></div>
+            </div>
+            <div class="setting-item">
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div><div class="setting-name">2Y/10Y 殖利曲線</div><div class="setting-tag">^IRX + ^TNX</div></div>
+            </div>
+            <div class="setting-item">
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div><div class="setting-name">高收益信用差 HYG</div><div class="setting-tag">HYG yfinance</div></div>
+            </div>
+          </div>
+          <div style="font-size:12px;font-weight:700;color:#374151;margin:16px 0 8px">🌏 宏觀資產</div>
+          <div class="settings-grid">
+            <div class="setting-item">
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div><div class="setting-name">美元指數 DXY</div><div class="setting-tag">DX-Y.NYB</div></div>
+            </div>
+            <div class="setting-item">
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div><div class="setting-name">黃金 GLD</div><div class="setting-tag">GLD yfinance</div></div>
+            </div>
+            <div class="setting-item">
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div><div class="setting-name">原油 CL=F</div><div class="setting-tag">yfinance</div></div>
+            </div>
+            <div class="setting-item">
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div><div class="setting-name">Bitcoin BTC-USD</div><div class="setting-tag">yfinance</div></div>
+            </div>
+            <div class="setting-item">
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div><div class="setting-name">區塊表現熱圖（11個 ETF）</div><div class="setting-tag">yfinance</div></div>
+            </div>
+          </div>
+          <div style="margin-top:20px;display:flex;gap:10px">
+            <button style="background:#1e40af;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">儲存設定</button>
+            <button style="background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;padding:10px 20px;border-radius:8px;font-size:13px;cursor:pointer">全部重置</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Placeholder pages -->
+      <div class="page" id="page-breadth">
+        <div class="section-title">市場寬度 — 完整頁面</div>
+        <div style="background:#fff;border-radius:12px;padding:32px;text-align:center;color:#6b7280;border:2px dashed #e5e7eb">
+          <div style="font-size:40px">📊</div>
+          <div style="margin-top:8px;font-size:15px;font-weight:600">市場寬度詳細頁</div>
+          <div style="font-size:12px;margin-top:4px">包含：^SPXA200R / ^SPXA50R 歷史走勢、A/D Line、52週高低圖表</div>
+        </div>
+      </div>
+      <div class="page" id="page-sentiment">
+        <div class="section-title">情緒指標</div>
+        <div style="background:#fff;border-radius:12px;padding:32px;text-align:center;color:#6b7280;border:2px dashed #e5e7eb">
+          <div style="font-size:40px">😨</div>
+          <div style="margin-top:8px;font-size:15px;font-weight:600">情緒指標完整頁</div>
+          <div style="font-size:12px;margin-top:4px">Fear &amp; Greed 歷史、VIX 走勢、AAII 情緒週報、Put/Call Ratio</div>
+        </div>
+      </div>
+      <div class="page" id="page-indices">
+        <div class="section-title">大盤指數詳細</div>
+        <div style="background:#fff;border-radius:12px;padding:32px;text-align:center;color:#6b7280;border:2px dashed #e5e7eb">
+          <div style="font-size:40px">📉</div>
+          <div style="margin-top:8px;font-size:15px;font-weight:600">4大指數完整頁</div>
+          <div style="font-size:12px;margin-top:4px">SPY / QQQ / IWM / DIA 完整K線 + 50MA/200MA 走勢</div>
+        </div>
+      </div>
+      <div class="page" id="page-sectors">
+        <div class="section-title">區塊表現熱圖</div>
+        <div style="background:#fff;border-radius:12px;padding:32px;text-align:center;color:#6b7280;border:2px dashed #e5e7eb">
+          <div style="font-size:40px">🗺️</div>
+          <div style="margin-top:8px;font-size:15px;font-weight:600">11個 Sector ETF 完整熱圖</div>
+        </div>
+      </div>
+      <div class="page" id="page-macro">
+        <div class="section-title">宏觀資產</div>
+        <div style="background:#fff;border-radius:12px;padding:32px;text-align:center;color:#6b7280;border:2px dashed #e5e7eb">
+          <div style="font-size:40px">🌏</div>
+          <div style="margin-top:8px;font-size:15px;font-weight:600">DXY / 黃金 / 原油 / BTC 走勢</div>
+        </div>
+      </div>
+      <div class="page" id="page-rates">
+        <div class="section-title">利率 &amp; 殖利曲線</div>
+        <div style="background:#fff;border-radius:12px;padding:32px;text-align:center;color:#6b7280;border:2px dashed #e5e7eb">
+          <div style="font-size:40px">💵</div>
+          <div style="margin-top:8px;font-size:15px;font-weight:600">殖利曲線 / 10年期 / 2Y-10Y 利差</div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- Notification toast -->
+<div class="notif" id="notif">✅ 資料已更新！2025-04-11 16:02 EST</div>
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+  // Page navigation
+  function showPage(page, el) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    const pageEl = document.getElementById('page-' + page);
+    if (pageEl) pageEl.classList.add('active');
+    if (el && el.classList) el.classList.add('active');
+  }
+
+  // Card expand
+  function toggleCard(card, detailId) {
+    const detail = document.getElementById(detailId);
+    const isOpen = detail.classList.contains('show');
+    // Close all details first
+    document.querySelectorAll('.detail-panel').forEach(p => { p.classList.remove('show'); p.style.display = 'none'; });
+    document.querySelectorAll('.index-card').forEach(c => c.classList.remove('expanded'));
+    if (!isOpen) {
+      detail.style.display = 'block';
+      detail.classList.add('show');
+      card.classList.add('expanded');
+      detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  function showDetailPanel(id) {
+    const el = document.getElementById(id);
+    el.style.display = 'block';
+    el.classList.add('show');
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function hideDetailPanel(id) {
+    const el = document.getElementById(id);
+    el.style.display = 'none';
+    el.classList.remove('show');
+    document.querySelectorAll('.index-card').forEach(c => c.classList.remove('expanded'));
+  }
+
+  // Refresh simulation
+  function simulateRefresh(btn) {
+    btn.classList.add('loading');
+    btn.querySelector('.spinner').style.display = 'inline-block';
+    btn.innerHTML = '<div class="spinner" style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite"></div> 更新中...';
+    setTimeout(() => {
+      btn.classList.remove('loading');
+      btn.innerHTML = '⟳ 更新資料';
+      // Show notification
+      const notif = document.getElementById('notif');
+      notif.classList.add('show');
+      // Update sidebar timestamp
+      document.querySelector('.sidebar-footer span').textContent = '2025-04-11 16:02 EST';
+      setTimeout(() => notif.classList.remove('show'), 3000);
+    }, 2000);
+  }
+
+  // Tab switching demo
+  document.querySelectorAll('.detail-tabs .tab').forEach(tab => {
+    tab.addEventListener('click', function() {
+      this.closest('.detail-tabs').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+
+  // Toggle switches
+  document.querySelectorAll('.toggle:not([style*="not-allowed"])').forEach(t => {
+    t.addEventListener('click', function() {
+      if (!this.style.cursor.includes('not-allowed')) this.classList.toggle('on');
+    });
+  });
+</script>
+</body>
+</html>

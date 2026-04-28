@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S&P 500 市場寬度監控</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ============================================================
+   主題系統
+   深色：柔和深藍灰，護眼不刺眼
+   淺色：暖白灰，低對比舒適
+============================================================ */
+:root {
+  /* ── 深色（預設） ── */
+  --bg-body:       #181c24;
+  --bg-surface:    #1e2330;
+  --bg-card:       #232a38;
+  --bg-input:      #2a3245;
+  --border:        #2e3650;
+  --border-light:  #252d40;
+
+  --text-h:        #d4d8e8;
+  --text-p:        #8e95ad;
+  --text-dim:      #525e78;
+
+  --blue:          #5b8af5;
+  --blue-dim:      rgba(91,138,245,0.15);
+  --orange:        #e07b45;
+  --orange-dim:    rgba(224,123,69,0.15);
+  --green:         #4caf82;
+  --green-dim:     rgba(76,175,130,0.12);
+  --red:           #e05656;
+  --red-dim:       rgba(224,86,86,0.12);
+  --gold:          #c9a84c;
+
+  --line-50:       #5b8af5;
+  --line-200:      #e07b45;
+
+  --shadow:        0 2px 12px rgba(0,0,0,0.35);
+  --shadow-card:   0 1px 4px rgba(0,0,0,0.25);
+}
+
+body.light {
+  /* ── 淺色 ── */
+  --bg-body:       #f2f3f7;
+  --bg-surface:    #ffffff;
+  --bg-card:       #ffffff;
+  --bg-input:      #f5f6fa;
+  --border:        #e0e3ee;
+  --border-light:  #eaecf4;
+
+  --text-h:        #252d42;
+  --text-p:        #5c6480;
+  --text-dim:      #9ba3bc;
+
+  --blue:          #3d6fdb;
+  --blue-dim:      rgba(61,111,219,0.08);
+  --orange:        #c96a30;
+  --orange-dim:    rgba(201,106,48,0.08);
+  --green:         #2e8a60;
+  --green-dim:     rgba(46,138,96,0.08);
+  --red:           #c94444;
+  --red-dim:       rgba(201,68,68,0.08);
+  --gold:          #a07c28;
+
+  --line-50:       #3d6fdb;
+  --line-200:      #c96a30;
+
+  --shadow:        0 2px 12px rgba(0,0,0,0.08);
+  --shadow-card:   0 1px 3px rgba(0,0,0,0.07);
+}
+
+/* ============================================================
+   重置 & 基底
+============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
+  font-size: 12.5px;
+  line-height: 1.55;
+  background: var(--bg-body);
+  color: var(--text-p);
+  min-height: 100vh;
+  transition: background .35s, color .35s;
+}
+
+button { font-family: inherit; cursor: pointer; }
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ============================================================
+   頂部導覽
+============================================================ */
+.navbar {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: var(--shadow);
+}
+
+.nav-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nav-logo {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--text-h);
+  text-transform: uppercase;
+}
+
+.nav-sep { width: 1px; height: 16px; background: var(--border); }
+
+.nav-sub {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.live-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: blink 2s ease infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 主題切換 pill */
+.theme-switch {
+  display: flex;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 1px;
+}
+
+.theme-btn {
+  padding: 3px 11px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  transition: all .2s;
+  letter-spacing: .03em;
+}
+.theme-btn:hover { color: var(--text-p); }
+.theme-btn.on {
+  background: var(--bg-card);
+  color: var(--text-h);
+  box-shadow: var(--shadow-card);
+}
+
+/* 更新按鈕 */
+.btn-refresh {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-p);
+  font-size: 11px;
+  font-weight: 600;
+  transition: all .2s;
+}
+.btn-refresh:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+/* ============================================================
+   頁面主體佈局
+============================================================ */
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 296px;
+  gap: 10px;
+  padding: 12px 14px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.col-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.col-side { display: flex; flex-direction: column; gap: 10px; }
+
+/* ============================================================
+   卡片
+============================================================ */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: var(--shadow-card);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.card-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+/* ============================================================
+   當日指標行
+============================================================ */
+.metric-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.metric-block {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  position: relative;
+}
+
+/* 頂部色條 */
+.metric-block::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 16px; right: 16px;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+}
+.metric-block.m-blue::after  { background: var(--blue); }
+.metric-block.m-orange::after { background: var(--orange); }
+
+.m-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.m-value {
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: -.03em;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.m-blue  .m-value { color: var(--blue); }
+.m-orange .m-value { color: var(--orange); }
+
+.m-delta {
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-bottom: 10px;
+}
+.up   { color: var(--green); }
+.down { color: var(--red); }
+.neu  { color: var(--text-dim); }
+
+/* 進度條軌道 */
+.m-track {
+  height: 6px;
+  background: var(--bg-input);
+  border-radius: 3px;
+  position: relative;
+  overflow: visible;
+}
+
+.m-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width .8s ease;
+}
+.m-blue   .m-fill { background: var(--blue); }
+.m-orange .m-fill { background: var(--orange); }
+
+/* 門檻標線 */
+.m-tick {
+  position: absolute;
+  top: -3px;
+  width: 1px;
+  height: 12px;
+  background: var(--border);
+}
+.m-tick-label {
+  position: absolute;
+  top: 10px;
+  font-size: 8.5px;
+  color: var(--text-dim);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+/* 超買/超賣針指 */
+.m-needle {
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 14px;
+  background: var(--gold);
+  border-radius: 1px;
+  transform: translateX(-50%);
+  box-shadow: 0 0 5px rgba(201,168,76,.5);
+  transition: left .8s ease;
+}
+
+.m-track-wrap { position: relative; padding-bottom: 18px; }
+
+/* ============================================================
+   歷史極端值
+============================================================ */
+.extremes {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.ext-block {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 10px 10px 8px;
+  text-align: center;
+}
+
+.ext-label { font-size: 9px; color: var(--text-dim); letter-spacing: .05em; margin-bottom: 4px; }
+.ext-val   { font-size: 18px; font-weight: 800; line-height: 1.1; }
+.ext-date  { font-size: 9px; color: var(--text-dim); margin-top: 3px; }
+.ext-high  { color: var(--red); }
+.ext-low   { color: var(--green); }
+
+/* 狀態徽章 */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .05em;
+}
+.s-normal    { background: var(--blue-dim);  color: var(--blue); }
+.s-overbought{ background: var(--red-dim);   color: var(--red); }
+.s-oversold  { background: var(--green-dim); color: var(--green); }
+
+/* ============================================================
+   時間範圍
+============================================================ */
+.range-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.range-btn {
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  transition: all .15s;
+}
+.range-btn:hover { color: var(--text-p); border-color: var(--text-dim); }
+.range-btn.on {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+body.light .range-btn.on { color: #fff; }
+
+.chart-legend {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-left: auto;
+}
+.leg-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.leg-line {
+  width: 20px;
+  height: 2px;
+  border-radius: 1px;
+}
+.leg-dash {
+  width: 20px;
+  height: 0;
+  border-top: 2px dashed;
+  opacity: .55;
+}
+
+/* 圖表框 */
+.chart-wrap { position: relative; height: 252px; }
+
+/* ============================================================
+   板塊橫條圖
+============================================================ */
+.sector-list { display: flex; flex-direction: column; gap: 4px; }
+
+.sector-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sector-name {
+  width: 80px;
+  font-size: 10.5px;
+  color: var(--text-p);
+  text-align: right;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.sector-track {
+  flex: 1;
+  height: 14px;
+  background: var(--bg-input);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.sector-fill {
+  height: 100%;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  padding-left: 6px;
+  transition: width .8s ease;
+}
+.sector-fill span {
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(255,255,255,.75);
+  white-space: nowrap;
+}
+body.light .sector-fill span { color: rgba(255,255,255,.9); }
+
+.sector-pct {
+  width: 30px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   右側面板
+============================================================ */
+
+/* 排序 tabs */
+.sort-tabs {
+  display: flex;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 1px;
+  margin-bottom: 10px;
+}
+.sort-tab {
+  flex: 1;
+  padding: 4px 2px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--text-dim);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  transition: all .15s;
+}
+.sort-tab.on {
+  background: var(--bg-card);
+  color: var(--text-h);
+  box-shadow: var(--shadow-card);
+}
+
+/* 排行榜表格 */
+.rank-table { width: 100%; border-collapse: collapse; }
+
+.rank-table thead th {
+  padding: 3px 5px 8px;
+  text-align: left;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+}
+
+.rank-table tbody tr {
+  border-bottom: 1px solid var(--border-light);
+  transition: background .12s;
+}
+.rank-table tbody tr:last-child { border-bottom: none; }
+.rank-table tbody tr:hover { background: var(--blue-dim); }
+.rank-table tbody td { padding: 7px 5px; vertical-align: middle; }
+
+.r-num  { font-size: 10px; color: var(--text-dim); width: 14px; }
+.r-tick { font-size: 12px; font-weight: 700; color: var(--text-h); display: block; }
+.r-name { font-size: 9px; color: var(--text-dim); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 68px; }
+
+.v-pos  { color: var(--green); font-weight: 700; }
+.v-neg  { color: var(--red);   font-weight: 700; }
+.v-neu  { color: var(--text-dim); }
+
+.sig-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.sig-u50  { background: var(--blue-dim);   color: var(--blue); }
+.sig-u200 { background: rgba(201,168,76,.12); color: var(--gold); }
+.sig-d50  { background: var(--red-dim);    color: var(--red); }
+.sig-nil  { color: var(--text-dim); font-size: 11px; }
+
+/* 圓餅圖 */
+.pie-wrap { height: 160px; position: relative; }
+
+/* 訊號列表 */
+.signal-list { display: flex; flex-direction: column; gap: 5px; }
+.signal-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.sig-icon {
+  width: 22px; height: 22px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+.icon-up   { background: var(--green-dim); color: var(--green); }
+.icon-down { background: var(--red-dim);   color: var(--red); }
+.sig-body  { flex: 1; }
+.sig-ticker { font-size: 11.5px; font-weight: 700; color: var(--text-h); }
+.sig-desc   { font-size: 9.5px; color: var(--text-dim); }
+.sig-time   { font-size: 9px; color: var(--text-dim); flex-shrink: 0; }
+</style>
+</head>
+
+<body>
+
+<!-- ===== 頂部導覽 ===== -->
+<nav class="navbar">
+  <div class="nav-left">
+    <span class="nav-logo">S&amp;P 500 Breadth</span>
+    <div class="nav-sep"></div>
+    <div class="live-dot"></div>
+    <span class="nav-sub">最後更新 2026-04-13 &nbsp;16:00 ET</span>
+  </div>
+  <div class="nav-right">
+    <div class="theme-switch">
+      <button class="theme-btn on" onclick="setTheme('dark', this)">深色</button>
+      <button class="theme-btn"   onclick="setTheme('light', this)">淺色</button>
+    </div>
+    <button class="btn-refresh">↻ 更新</button>
+  </div>
+</nav>
+
+<!-- ===== 主體 ===== -->
+<div class="layout">
+
+  <!-- ──── 左欄 ──── -->
+  <div class="col-main">
+
+    <!-- 當日指標 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">當日市場寬度</span>
+        <span class="status-pill s-normal">● 正常區間</span>
+      </div>
+
+      <div class="metric-row">
+        <!-- 50日 -->
+        <div class="metric-block m-blue">
+          <div class="m-label">% 高於 50 日均線</div>
+          <div class="m-value">62.4<span style="font-size:16px;font-weight:500;">%</span></div>
+          <div class="m-delta up">▲ +3.2%
+            <span class="neu" style="font-weight:400; margin-left:2px;">較昨日</span>
+          </div>
+          <div class="m-track-wrap">
+            <div class="m-track">
+              <div class="m-fill" style="width:62.4%;"></div>
+              <div class="m-tick" style="left:15%;"></div>
+              <div class="m-tick" style="left:85%;"></div>
+              <div class="m-needle" style="left:62.4%;"></div>
+            </div>
+            <span class="m-tick-label" style="left:15%;">15%</span>
+            <span class="m-tick-label" style="left:85%;">85%</span>
+          </div>
+        </div>
+
+        <!-- 200日 -->
+        <div class="metric-block m-orange">
+          <div class="m-label">% 高於 200 日均線</div>
+          <div class="m-value">41.2<span style="font-size:16px;font-weight:500;">%</span></div>
+          <div class="m-delta down">▼ −1.1%
+            <span class="neu" style="font-weight:400; margin-left:2px;">較昨日</span>
+          </div>
+          <div class="m-track-wrap">
+            <div class="m-track">
+              <div class="m-fill" style="width:41.2%;"></div>
+              <div class="m-tick" style="left:15%;"></div>
+              <div class="m-tick" style="left:85%;"></div>
+              <div class="m-needle" style="left:41.2%;"></div>
+            </div>
+            <span class="m-tick-label" style="left:15%;">15%</span>
+            <span class="m-tick-label" style="left:85%;">85%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 歷史極端值 -->
+      <div class="extremes">
+        <div class="ext-block">
+          <div class="ext-label">50日 歷史最高</div>
+          <div class="ext-val ext-high">96.8%</div>
+          <div class="ext-date">2021-11-09</div>
+        </div>
+        <div class="ext-block">
+          <div class="ext-label">50日 歷史最低</div>
+          <div class="ext-val ext-low">2.4%</div>
+          <div class="ext-date">2020-03-23</div>
+        </div>
+        <div class="ext-block">
+          <div class="ext-label">200日 歷史最高</div>
+          <div class="ext-val ext-high">90.1%</div>
+          <div class="ext-date">2021-12-17</div>
+        </div>
+        <div class="ext-block">
+          <div class="ext-label">200日 歷史最低</div>
+          <div class="ext-val ext-low">4.7%</div>
+          <div class="ext-date">2009-03-06</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 歷史時序圖 -->
+    <div class="card">
+      <div class="card-header" style="flex-wrap:wrap; gap:8px;">
+        <span class="card-title">歷史市場寬度（2004 – 2026）</span>
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <div class="range-row">
+            <button class="range-btn" onclick="setRange('1M',this)">1M</button>
+            <button class="range-btn" onclick="setRange('3M',this)">3M</button>
+            <button class="range-btn" onclick="setRange('1Y',this)">1Y</button>
+            <button class="range-btn" onclick="setRange('5Y',this)">5Y</button>
+            <button class="range-btn on" onclick="setRange('ALL',this)">ALL</button>
+          </div>
+          <div class="chart-legend">
+            <div class="leg-item">
+              <div class="leg-line" style="background:var(--line-50);"></div>
+              <span>50日</span>
+            </div>
+            <div class="leg-item">
+              <div class="leg-line" style="background:var(--line-200);"></div>
+              <span>200日</span>
+            </div>
+            <div class="leg-item">
+              <div class="leg-dash" style="border-color:var(--text-dim); width:20px;"></div>
+              <span>85% / 15%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="mainChart"></canvas>
+      </div>
+    </div>
+
+    <!-- 板塊分佈 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">GICS 板塊寬度&nbsp;（高於 50 日均線）</span>
+      </div>
+      <div class="sector-list" id="sectorList"></div>
+    </div>
+
+  </div><!-- /col-main -->
+
+  <!-- ──── 右欄 ──── -->
+  <div class="col-side">
+
+    <!-- 個股排行榜 -->
+    <div class="card" style="flex:1;">
+      <div class="card-header">
+        <span class="card-title">個股排行榜&nbsp;Top 10</span>
+      </div>
+      <div class="sort-tabs">
+        <button class="sort-tab on" onclick="setSort('c',this)">市值貢獻</button>
+        <button class="sort-tab"    onclick="setSort('d',this)">距均線</button>
+        <button class="sort-tab"    onclick="setSort('s',this)">突破訊號</button>
+      </div>
+      <table class="rank-table">
+        <thead>
+          <tr>
+            <th>#</th><th>股票</th><th>貢獻</th><th>距50日</th><th>訊號</th>
+          </tr>
+        </thead>
+        <tbody id="rankBody"></tbody>
+      </table>
+    </div>
+
+    <!-- 板塊圓餅圖 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">板塊分佈</span>
+      </div>
+      <div class="pie-wrap">
+        <canvas id="pieChart"></canvas>
+      </div>
+    </div>
+
+    <!-- 近期訊號 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">近期突破 / 跌破</span>
+      </div>
+      <div class="signal-list">
+        <div class="signal-item">
+          <div class="sig-icon icon-up">↑</div>
+          <div class="sig-body">
+            <div class="sig-ticker">NVDA</div>
+            <div class="sig-desc">突破 200 日均線</div>
+          </div>
+          <span class="sig-time">今日</span>
+        </div>
+        <div class="signal-item">
+          <div class="sig-icon icon-up">↑</div>
+          <div class="sig-body">
+            <div class="sig-ticker">META</div>
+            <div class="sig-desc">突破 50 日均線</div>
+          </div>
+          <span class="sig-time">今日</span>
+        </div>
+        <div class="signal-item">
+          <div class="sig-icon icon-up">↑</div>
+          <div class="sig-body">
+            <div class="sig-ticker">LLY</div>
+            <div class="sig-desc">突破 50 日均線</div>
+          </div>
+          <span class="sig-time">1天前</span>
+        </div>
+        <div class="signal-item">
+          <div class="sig-icon icon-down">↓</div>
+          <div class="sig-body">
+            <div class="sig-ticker">INTC</div>
+            <div class="sig-desc">跌破 50 日均線</div>
+          </div>
+          <span class="sig-time">2天前</span>
+        </div>
+        <div class="signal-item">
+          <div class="sig-icon icon-down">↓</div>
+          <div class="sig-body">
+            <div class="sig-ticker">BA</div>
+            <div class="sig-desc">跌破 200 日均線</div>
+          </div>
+          <span class="sig-time">3天前</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /col-side -->
+</div><!-- /layout -->
+
+<script>
+/* ============================================================
+   主題切換
+============================================================ */
+function setTheme(t, btn) {
+  document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  document.body.classList.toggle('light', t === 'light');
+  rebuildCharts();
+}
+
+/* ============================================================
+   工具：讀取 CSS 變數
+============================================================ */
+function v(name) {
+  return getComputedStyle(document.body).getPropertyValue(name).trim();
+}
+
+/* ============================================================
+   板塊資料
+============================================================ */
+const SECTORS = [
+  { name:'資訊科技',   pct:74, color:'#5b8af5' },
+  { name:'非必需消費', pct:68, color:'#6fa8dc' },
+  { name:'金融',       pct:61, color:'#4caf82' },
+  { name:'工業',       pct:58, color:'#57c47a' },
+  { name:'醫療保健',   pct:49, color:'#9e9e9e' },
+  { name:'必需消費',   pct:44, color:'#a0a0a0' },
+  { name:'房地產',     pct:38, color:'#e0a04a' },
+  { name:'公用事業',   pct:35, color:'#e07b45' },
+  { name:'原物料',     pct:28, color:'#e06060' },
+  { name:'能源',       pct:19, color:'#d94f4f' },
+  { name:'通訊服務',   pct:12, color:'#c94040' },
+];
+
+function buildSectors() {
+  const el = document.getElementById('sectorList');
+  el.innerHTML = SECTORS.map(s => {
+    const c = s.pct >= 60 ? v('--green') : s.pct >= 40 ? v('--orange') : v('--red');
+    return `
+    <div class="sector-row">
+      <div class="sector-name">${s.name}</div>
+      <div class="sector-track">
+        <div class="sector-fill" style="width:${s.pct}%; background:${c};">
+          <span>${s.pct}%</span>
+        </div>
+      </div>
+      <div class="sector-pct" style="color:${c};">${s.pct}%</div>
+    </div>`;
+  }).join('');
+}
+
+/* ============================================================
+   排行榜
+============================================================ */
+const STOCKS = [
+  { rank:1,  ticker:'NVDA',  name:'Nvidia',    contrib:'+0.32%', dist:'+48.2%', sig:'u200' },
+  { rank:2,  ticker:'MSFT',  name:'Microsoft', contrib:'+0.28%', dist:'+20.6%', sig:'' },
+  { rank:3,  ticker:'AAPL',  name:'Apple',     contrib:'+0.19%', dist:'+14.9%', sig:'' },
+  { rank:4,  ticker:'META',  name:'Meta',      contrib:'+0.15%', dist:'+67.1%', sig:'u50' },
+  { rank:5,  ticker:'AMZN',  name:'Amazon',    contrib:'+0.12%', dist:'+32.3%', sig:'' },
+  { rank:6,  ticker:'GOOGL', name:'Alphabet',  contrib:'+0.10%', dist:'+18.8%', sig:'' },
+  { rank:7,  ticker:'BRK.B', name:'Berkshire', contrib:'+0.08%', dist:'+11.2%', sig:'' },
+  { rank:8,  ticker:'LLY',   name:'Eli Lilly', contrib:'+0.07%', dist:'+43.6%', sig:'u50' },
+  { rank:9,  ticker:'JPM',   name:'JPMorgan',  contrib:'+0.06%', dist:'+8.1%',  sig:'' },
+  { rank:10, ticker:'TSLA',  name:'Tesla',     contrib:'+0.05%', dist:'+91.4%', sig:'u200' },
+];
+
+function renderRank() {
+  const tbody = document.getElementById('rankBody');
+  tbody.innerHTML = STOCKS.map(s => {
+    const sigHtml = s.sig === 'u200'
+      ? `<span class="sig-tag sig-u200">↑200d</span>`
+      : s.sig === 'u50'
+      ? `<span class="sig-tag sig-u50">↑50d</span>`
+      : s.sig === 'd50'
+      ? `<span class="sig-tag sig-d50">↓50d</span>`
+      : `<span class="sig-nil">—</span>`;
+    const dc = s.dist.startsWith('+') ? 'v-pos' : 'v-neg';
+    return `<tr>
+      <td class="r-num">${s.rank}</td>
+      <td><span class="r-tick">${s.ticker}</span><span class="r-name">${s.name}</span></td>
+      <td class="v-pos">${s.contrib}</td>
+      <td class="${dc}">${s.dist}</td>
+      <td>${sigHtml}</td>
+    </tr>`;
+  }).join('');
+}
+
+function setSort(t, btn) {
+  document.querySelectorAll('.sort-tab').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+}
+
+/* ============================================================
+   模擬 20 年歷史數據
+============================================================ */
+function genData() {
+  const labels = [], d50 = [], d200 = [];
+  let v50 = 55, v200 = 48;
+  const start = new Date(2004, 0, 2);
+  let idx = 0;
+  for (let i = 0; i < 5700; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    if (d.getDay() === 0 || d.getDay() === 6) continue;
+    const t = idx / 5200;
+
+    let s = 0;
+    if (t>.17 && t<.27) s = -48*Math.sin((t-.17)/.1*Math.PI);   // 2008 GFC
+    if (t>.60 && t<.63) s = -55*Math.sin((t-.60)/.03*Math.PI);  // 2020 covid crash
+    if (t>.63 && t<.72) s =  32*Math.sin((t-.63)/.09*Math.PI);  // 2021 bull
+    if (t>.72 && t<.80) s = -28*Math.sin((t-.72)/.08*Math.PI);  // 2022 bear
+    if (t>.95) s = -18*Math.sin((t-.95)/.05*Math.PI);            // 2025 recent
+
+    v50  = Math.max(2, Math.min(98, v50  + (Math.random()-.485)*2.8 + s*.085 + (52-v50)*.002));
+    v200 = Math.max(2, Math.min(96, v200 + (Math.random()-.485)*1.9 + s*.055 + (50-v200)*.0015));
+
+    if (idx % 3 === 0) {   // 只取 1/3 點以提高性能
+      labels.push(d.toISOString().slice(0,7));  // YYYY-MM
+      d50.push(+v50.toFixed(1));
+      d200.push(+v200.toFixed(1));
+    }
+    idx++;
+  }
+  return { labels, d50, d200 };
+}
+
+const { labels, d50, d200 } = genData();
+
+/* ============================================================
+   主折線圖
+============================================================ */
+let mainChart, pieChart;
+
+function buildMainChart() {
+  if (mainChart) mainChart.destroy();
+  const ctx = document.getElementById('mainChart').getContext('2d');
+
+  const line50  = v('--line-50');
+  const line200 = v('--line-200');
+  const textDim = v('--text-dim');
+  const border  = v('--border');
+  const bgCard  = v('--bg-card');
+
+  mainChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: '% 高於 50日MA',
+          data: d50,
+          borderColor: line50,
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0.25,
+          fill: false,
+        },
+        {
+          label: '% 高於 200日MA',
+          data: d200,
+          borderColor: line200,
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0.25,
+          fill: false,
+        },
+        {
+          label: '85%',
+          data: labels.map(() => 85),
+          borderColor: v('--red'),
+          borderWidth: 1,
+          borderDash: [5, 4],
+          pointRadius: 0,
+          fill: false,
+        },
+        {
+          label: '15%',
+          data: labels.map(() => 15),
+          borderColor: v('--green'),
+          borderWidth: 1,
+          borderDash: [5, 4],
+          pointRadius: 0,
+          fill: false,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 400 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: v('--bg-input'),
+          borderColor: border,
+          borderWidth: 1,
+          titleColor: v('--text-h'),
+          bodyColor: v('--text-p'),
+          padding: 10,
+          callbacks: {
+            label: c => {
+              if (c.datasetIndex > 1) return null;
+              return ` ${c.dataset.label}: ${c.parsed.y.toFixed(1)}%`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: textDim,
+            maxRotation: 0,
+            maxTicksLimit: 10,
+            font: { size: 9 },
+          },
+          grid: { color: border },
+        },
+        y: {
+          min: 0, max: 100,
+          ticks: {
+            color: textDim,
+            font: { size: 9 },
+            callback: val => val + '%',
+            stepSize: 25,
+          },
+          grid: { color: border },
+        }
+      }
+    }
+  });
+}
+
+/* ============================================================
+   圓餅圖
+============================================================ */
+const PIE_COLORS = [
+  '#5b8af5','#4caf82','#9e9e9e','#6fa8dc','#57c47a',
+  '#e07b45','#a0a0a0','#e06060','#d94f4f','#c94040','#e0a04a'
+];
+
+function buildPieChart() {
+  if (pieChart) pieChart.destroy();
+  const ctx = document.getElementById('pieChart').getContext('2d');
+  pieChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: SECTORS.map(s => s.name),
+      datasets: [{
+        data: SECTORS.map(s => s.pct),
+        backgroundColor: PIE_COLORS,
+        borderWidth: 0,
+        hoverOffset: 5,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '60%',
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: {
+            color: v('--text-dim'),
+            font: { size: 9 },
+            boxWidth: 8,
+            padding: 5,
+          }
+        },
+        tooltip: {
+          backgroundColor: v('--bg-input'),
+          borderColor: v('--border'),
+          borderWidth: 1,
+          bodyColor: v('--text-p'),
+          callbacks: {
+            label: c => ` ${c.label}: ${c.parsed}%`
+          }
+        }
+      }
+    }
+  });
+}
+
+function rebuildCharts() {
+  buildSectors();
+  buildMainChart();
+  buildPieChart();
+}
+
+function setRange(r, btn) {
+  document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+}
+
+/* ── 初始化 ── */
+buildSectors();
+renderRank();
+buildMainChart();
+buildPieChart();
+</script>
+</body>
+</html>

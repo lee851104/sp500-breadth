@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# PyInstaller build output
+build/
+dist/
+*.spec
+
+# Streamlit / diskcache
+breadth_dashboard/cache/
+cache/
+.streamlit/secrets.toml
+
+# Temp files
+*.tmp
+*.tmp.*
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
