@@ -18,7 +18,7 @@ from modules.breadth_calc import (
     calc_sector_breadth, calc_sector_breadth_multiperiod,
     get_breadth_status, get_extreme_stats,
 )
-from config import OVERBOUGHT, OVERSOLD, DARK, LIGHT, SECTOR_COLORS, SECTOR_NAMES_ZH
+from config import OVERBOUGHT, OVERSOLD, DARK, SECTOR_NAMES_ZH
 
 st.set_page_config(
     page_title="S&P 500 Breadth Monitor",
@@ -27,15 +27,11 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-_DESIGN_VER = "omega-v1"
-if st.session_state.get("_design_ver") != _DESIGN_VER:
-    st.session_state["theme"]       = "dark"
-    st.session_state["sort_mode"]   = "contrib"
-    st.session_state["time_range"]  = "5Y"
-    st.session_state["_design_ver"] = _DESIGN_VER
+st.session_state.setdefault("sort_mode", "contrib")
+st.session_state.setdefault("time_range", "5Y")
 
-T       = DARK if st.session_state.theme == "dark" else LIGHT
-is_dark = st.session_state.theme == "dark"
+T       = DARK
+is_dark = True
 
 # ─── CSS ─────────────────────────────────────────────────────
 st.markdown(
@@ -266,9 +262,7 @@ is_stale  = (not history.empty) and (data_date < today_str)
 # ═══════════════════════════════════════════════════════════════
 # 標題列
 # ═══════════════════════════════════════════════════════════════
-lbl_theme = "☀ 淺色" if is_dark else "☾ 深色"
-
-_head_col, _theme_col = st.columns([9, 1])
+_head_col, _ = st.columns([9, 1])
 with _head_col:
     st.markdown(
         '<div style="padding:20px 0 4px;">'
@@ -283,11 +277,6 @@ with _head_col:
         '</p>'
         '</div>',
         unsafe_allow_html=True)
-with _theme_col:
-    st.markdown('<div style="height:26px;"></div>', unsafe_allow_html=True)
-    if st.button(lbl_theme, key="btn_theme"):
-        st.session_state.theme = "light" if is_dark else "dark"; st.rerun()
-
 st.markdown(
     '<div style="border-top:1px solid ' + T["border"] + ';margin:4px 0 18px;"></div>',
     unsafe_allow_html=True)
