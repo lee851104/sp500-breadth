@@ -94,6 +94,27 @@ div[data-testid="stVerticalBlock"]>div {{gap:0;}}
     border-radius:12px !important;
     color:{T['text_h']} !important;
 }}
+.stSelectbox > div > div > div {{
+    color:{T['text_h']} !important;
+}}
+/* 下拉選單本體 */
+[data-baseweb="popover"] [data-baseweb="menu"] {{
+    background:{T['bg_surface']} !important;
+    border:1px solid {T['border']} !important;
+    border-radius:12px !important;
+}}
+[data-baseweb="popover"] li {{
+    background:{T['bg_surface']} !important;
+    color:{T['text_p']} !important;
+}}
+[data-baseweb="popover"] li:hover {{
+    background:{T['bg_input']} !important;
+    color:{T['text_h']} !important;
+}}
+[data-baseweb="popover"] [aria-selected="true"] {{
+    background:{T['bg_input']} !important;
+    color:{T['green']} !important;
+}}
 
 .stMarkdown p,.stMarkdown span {{color:{T['text_p']};}}
 hr {{border:none;border-top:1px solid {T['border']};margin:6px 0 16px;}}
@@ -330,25 +351,45 @@ left_col, right_col = st.columns([3, 1], gap="medium")
 # ───────────────────────────────────────────────────────────────
 with left_col:
 
-    # ── 時間範圍按鈕（均等欄寬）────────────────────────────
+    # ── 時間範圍（st.radio 水平排，CSS 改成 pill 樣式）─────
     range_opts = ["1Y", "3Y", "5Y", "10Y", "ALL"]
-    rcols = st.columns(len(range_opts))
-    for opt, rc in zip(range_opts, rcols):
-        with rc:
-            is_active = st.session_state.time_range == opt
-            if is_active:
-                st.markdown(
-                    '<style>.btn_active_' + opt + '>button{'
-                    'background:' + T["bg_input"] + ' !important;'
-                    'color:' + T["text_h"] + ' !important;'
-                    'border-color:' + T["blue"] + ' !important;}'
-                    '</style>'
-                    '<div class="btn_active_' + opt + '">',
-                    unsafe_allow_html=True)
-            if st.button(opt, key="r_" + opt):
-                st.session_state.time_range = opt; st.rerun()
-            if is_active:
-                st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown(f"""<style>
+    div[data-testid="stRadio"] > div {{
+        display:flex; flex-direction:row; gap:6px; flex-wrap:wrap;
+    }}
+    div[data-testid="stRadio"] label {{
+        display:inline-flex; align-items:center;
+        padding:5px 16px; border-radius:999px;
+        background:rgba(255,255,255,0.04);
+        border:1px solid {T['border']};
+        color:{T['text_p']}; font-size:12px; font-weight:500;
+        font-family:Sora,sans-serif; cursor:pointer;
+        transition:all 180ms;
+    }}
+    div[data-testid="stRadio"] label:hover {{
+        color:{T['text_h']}; border-color:{T['blue']};
+    }}
+    div[data-testid="stRadio"] label[data-selected="true"],
+    div[data-testid="stRadio"] input:checked + div {{
+        background:{T['bg_input']}; color:{T['text_h']};
+        border-color:{T['blue']}; font-weight:700;
+    }}
+    div[data-testid="stRadio"] input {{ display:none; }}
+    div[data-testid="stRadio"] p {{ font-size:12px; margin:0; }}
+    div[data-testid="stRadio"] > label {{ display:none; }}
+    </style>""", unsafe_allow_html=True)
+
+    selected_range = st.radio(
+        "time_range_radio",
+        options=range_opts,
+        index=range_opts.index(st.session_state.time_range),
+        horizontal=True,
+        label_visibility="collapsed",
+        key="time_range_radio",
+    )
+    if selected_range != st.session_state.time_range:
+        st.session_state.time_range = selected_range
+        st.rerun()
 
     # ── 歷史圖 ──────────────────────────────────────────────
     days_map = {"1Y": 365, "3Y": 1095, "5Y": 1825, "10Y": 3650, "ALL": 99999}
@@ -523,42 +564,21 @@ with left_col:
 # ───────────────────────────────────────────────────────────────
 with right_col:
 
-    # ── 個股排名查詢 ────────────────────────────────────────
-    ticker_input = st.text_input(
-        "查詢個股排名",
-        placeholder="代碼或公司名稱",
-        key="ticker_lookup",
-        label_visibility="visible",
-    ).strip()
-
-    if ticker_input and not stock_metrics.empty:
+    # ── 個股排名查詢（全清單 selectbox，打字即時過濾）────────
+    resolved_symbol = None
+    if not stock_metrics.empty:
         df_all = stock_metrics.copy()
-        q_upper = ticker_input.upper()
-
-        # 精確符合 symbol 優先；否則做模糊搜尋
-        exact_match = df_all[df_all["symbol"] == q_upper]
-        if not exact_match.empty:
-            resolved_symbol = q_upper
-        else:
-            fuzzy = df_all[
-                df_all["symbol"].str.contains(q_upper, case=False, na=False) |
-                df_all["company"].str.contains(ticker_input, case=False, na=False)
-            ]
-            if len(fuzzy) == 1:
-                resolved_symbol = fuzzy.iloc[0]["symbol"]
-            elif len(fuzzy) > 1:
-                options = [
-                    row["symbol"] + "  " + str(row["company"])[:30]
-                    for _, row in fuzzy.head(10).iterrows()
-                ]
-                chosen = st.selectbox(
-                    "找到多個符合結果，請選擇：",
-                    options=[""] + options,
-                    key="ticker_select",
-                )
-                resolved_symbol = chosen.split("  ")[0].strip() if chosen else None
-            else:
-                resolved_symbol = None
+        all_options = [
+            row["symbol"] + "  " + str(row["company"])[:32]
+            for _, row in df_all.sort_values("symbol").iterrows()
+        ]
+        chosen = st.selectbox(
+            "查詢個股排名",
+            options=[""] + all_options,
+            key="ticker_lookup",
+            placeholder="輸入代碼或公司名稱…",
+        )
+        resolved_symbol = chosen.split("  ")[0].strip() if chosen else None
 
         if resolved_symbol:
             rank_contrib = (
@@ -691,15 +711,6 @@ with right_col:
                 + detail_html
             )
             card(lookup_html, pad="16px 18px")
-        elif len(ticker_input) > 0 and resolved_symbol is None and not (
-            df_all["symbol"].str.contains(q_upper, case=False, na=False).any() or
-            df_all["company"].str.contains(ticker_input, case=False, na=False).any()
-        ):
-            not_found_html = (
-                '<span style="font-size:12px;color:' + T["red"] + ';">'
-                '查無符合「' + ticker_input + '」的成分股</span>'
-            )
-            card(not_found_html, pad="10px 14px")
 
     # 排行榜排序按鈕（tabs 樣式）
     sort_labels = {"contrib": "市值貢獻", "dist": "距均線", "signal": "突破訊號"}
