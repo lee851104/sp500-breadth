@@ -46,7 +46,7 @@ git push
 
 ## Architecture in One Paragraph
 
-`sp500_fetcher.py` fetches the S&P 500 constituent list and market-cap weights from Wikipedia (uses a Chrome User-Agent to avoid 403). `market_data.py` downloads closing prices for all ~503 tickers from yfinance in batches of 50. `breadth_calc.py` computes the percentage of stocks above their 50-day and 200-day moving averages, per-stock metrics, sector aggregates, and multi-period sector breadth snapshots. `app.py` is a single-file Streamlit UI that reads from `config.py` for all thresholds and theme colours, then renders everything using injected CSS and Plotly charts. All data is cached via `diskcache` (SQLite, 24-hr TTL) and `@st.cache_resource`.
+`sp500_fetcher.py` fetches the S&P 500 constituent list and market-cap weights from Wikipedia (uses a Chrome User-Agent to avoid 403). `market_data.py` downloads closing prices for all ~503 tickers from yfinance in batches of 50. `breadth_calc.py` computes the percentage of stocks above their 50-day and 200-day moving averages, per-stock metrics, sector aggregates, and multi-period sector breadth snapshots. `app.py` is a single-file Streamlit UI that reads from `config.py` for all thresholds and theme colours, then renders everything using injected CSS (Omega Design System, Sora font) and Plotly charts. All data is cached via `diskcache` (SQLite, 24-hr TTL) and `@st.cache_resource`.
 
 ## Cache Clearing
 
@@ -78,5 +78,12 @@ py build_exe.py        # installs PyInstaller if missing, then builds
 
 Output: `breadth_dashboard/dist/SP500_Breadth/SP500_Breadth.exe` (~300–500 MB folder).  
 Distribute the entire `SP500_Breadth/` folder. `launcher.py` is the PyInstaller entry point — it passes `--global.developmentMode=false` to Streamlit (required, omitting causes RuntimeError) and opens the browser. `build_exe.py` copies `app.py`, `config.py`, and `modules/` next to the exe post-build because Streamlit reads source files from disk, not PyInstaller's temp dir.
+
+## Streamlit Cloud Deployment Notes
+
+- Auto-redeploys on push to `main`, but may need manual **Manage app → Reboot app** if stuck.
+- `@st.cache_resource` persists across redeploys — cached data survives but code changes are picked up.
+- Session state also survives redeploys; use `st.session_state.setdefault()` (not direct assignment) for user-controlled state, so toggles aren't overridden on rerun.
+- Font injection: use `<link rel="stylesheet">` not `@import` inside `<style>` — Streamlit injects `<style>` blocks into the body, not `<head>`, so `@import` is silently ignored.
 
 See `breadth_dashboard/CLAUDE.md` for the full theme colour key, HTML generation rules, chart layer order, and known quirks.

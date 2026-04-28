@@ -58,11 +58,11 @@ modules/
 
 ## Theme System
 
-Two theme dicts in `config.py`: `DARK`, `LIGHT`. Default theme is **light**.
+Two theme dicts in `config.py`: `DARK` (Omega Design System tokens), `LIGHT`. Default theme is **dark**.
 
-`app.py` reads `st.session_state.theme`, selects `T = DARK or LIGHT`, and injects all colours via a single `st.markdown("<style>…</style>")` block. Charts are rebuilt via `plot_base()` which reads from `T`.
+`app.py` reads `st.session_state.theme`, selects `T = DARK or LIGHT`, and injects all colours via a `st.markdown("<style>…</style>")` block. Sora font is loaded via `<link rel="stylesheet">` (not `@import` — Streamlit's DOM injection breaks `@import`). Charts are rebuilt via `plot_base()` which reads from `T`.
 
-Theme is toggled with **two buttons** (`btn_light` / `btn_dark`) placed beside the indicator panel (not in the header — the header scrolls out of view). Default session-state values: `theme="light"`, `time_range="5Y"`, `sort_mode="contrib"`.
+Theme toggle is a single button (`btn_theme`) in the title row (cycles dark ↔ light). Default session-state values: `theme="dark"`, `time_range="5Y"`, `sort_mode="contrib"`. `.streamlit/config.toml` also sets `[theme] base="dark"` to ensure Streamlit Cloud renders dark before the first Python render.
 
 ### Colour Key Reference
 
@@ -90,29 +90,30 @@ html = f'<div style="{f"color:{T[\"red\"]}"}">text</div>'  # corrupts
 ## Page Layout
 
 ```
-Title row: S&P 500 Breadth · live dot          [☾ 深色 / ☀ 淺色]
+Title row: 市場寬度 · Market Breadth + subtitle   [☀ 淺色 / ☾ 深色]
 ──────────────────────────────────────────────────────────────────
-Indicator panel [4]              [↻ 更新資料]
-  "資料截至 YYYY-MM-DD"  [資料非最新 badge if stale]
-  Row: 50日市場寬度  ── label + value(20px bold) + bar + dot
-  Row: 200日市場寬度 ── same
+Meta row: ● 市場開盤中 · 更新於 YYYY-MM-DD  [資料非最新 badge if stale]
+KPI gauges [5 cols]                          [↻ 更新資料 col]
+  Left card:  50 日均線寬度  — large %, delta arrow, gauge track, signal label
+  Right card: 200 日均線寬度 — same
 ──────────────────────────────────────────────────────────────────
 Left col [3]                    Right col [1]
-  Time-range buttons              查詢個股排名 (text_input)
-  Breadth chart (620 px)          ↳ result card (if query active):
-  Sector bar chart (50MA %)           symbol + company name
+  Time-range buttons (5 equal)    查詢個股排名 (text_input)
+  Breadth chart card (620 px)     ↳ result card (if query active):
+  Sector bar chart card               avatar chip + symbol + company
                                       三種排名並排 (#N / total)
                                       詳細資訊（依 sort_mode 切換）
-                                  Sort buttons (市值貢獻/距均線/突破訊號)
-                                  Top-10 ranking table
+                                  Tab indicator row (市值貢獻/距均線/突破訊號)
+                                  Sort buttons (same 3 options, functional)
+                                  Top-10 ranking table (dot + name + values)
                                   Sector multi-period table
-                                    (5日 / 20日 / 50日 % above 50MA)
+                                    (5日 / 20日 / 50日 % above 50MA pill badges)
 ```
 
-- `indicators_html(val50, val200)` renders both breadth bars as a single flex row; dot position clamped to `[2, 98]%`.
-- `data_date` is taken from `history.index[-1]`, not `date.today()` — reflects actual last trading day.
-- "資料非最新" orange badge appears when `data_date < today`.
-- Theme toggle is a single button in the title row (cycles light ↔ dark); ↻ 更新資料 sits beside the indicator panel.
+- `indicators_html(val50, val200)` renders two separate rounded KPI cards (not one flex row); dot clamped to `[2, 98]%`; gauge has low/high colour zones.
+- `data_date` is taken from `history.index[-1]`, not `date.today()`.
+- "資料非最新" pill badge appears when `data_date < today`.
+- Theme toggle (`btn_theme`) is in the title row right column; ↻ 更新資料 sits beside the KPI gauges.
 
 ## Chart Architecture (`app.py`)
 
