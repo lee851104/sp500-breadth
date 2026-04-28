@@ -98,7 +98,7 @@ KPI gauges [5 cols]                          [↻ 更新資料 col]
   Right card: 200 日均線寬度 — same
 ──────────────────────────────────────────────────────────────────
 Left col [3]                    Right col [1]
-  Time-range buttons (5 equal)    查詢個股排名 (text_input)
+  Time-range st.radio (pill CSS)  查詢個股排名 (st.selectbox, all 503)
   Breadth chart card (620 px)     ↳ result card (if query active):
   Sector bar chart card               avatar chip + symbol + company
                                       三種排名並排 (#N / total)
@@ -110,6 +110,8 @@ Left col [3]                    Right col [1]
                                     (5日 / 20日 / 50日 % above 50MA pill badges)
 ```
 
+- **Time-range selector**: `st.radio(horizontal=True, key="time_range_radio")` with CSS overrides to hide radio dots and style labels as pills. Do NOT use `st.columns` + `st.button` — columns spread out to equal widths and cannot be collapsed.
+- **Stock search**: `st.selectbox(key="ticker_lookup")` with all 503 options pre-loaded sorted by symbol. Streamlit's built-in text filtering handles fuzzy search; exact matches are sorted first. The `[data-baseweb="popover"]` CSS selector styles the dropdown dark.
 - `indicators_html(val50, val200)` renders two separate rounded KPI cards (not one flex row); dot clamped to `[2, 98]%`; gauge has low/high colour zones.
 - `data_date` is taken from `history.index[-1]`, not `date.today()`.
 - "資料非最新" pill badge appears when `data_date < today`.
