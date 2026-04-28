@@ -90,23 +90,29 @@ html = f'<div style="{f"color:{T[\"red\"]}"}">text</div>'  # corrupts
 ## Page Layout
 
 ```
-Title (S&P 500 Breadth · live dot)
+Title row: S&P 500 Breadth · live dot          [☾ 深色 / ☀ 淺色]
 ──────────────────────────────────────────────────────────────────
-Indicator panel (full-width card)     [淺色] [深色] [↻ 更新]
+Indicator panel [4]              [↻ 更新資料]
   "資料截至 YYYY-MM-DD"  [資料非最新 badge if stale]
   Row: 50日市場寬度  ── label + value(20px bold) + bar + dot
   Row: 200日市場寬度 ── same
 ──────────────────────────────────────────────────────────────────
 Left col [3]                    Right col [1]
-  Time-range buttons              Sort buttons
-  Breadth chart (620 px)          Top-10 ranking table
-  Sector bar chart (50MA %)       Sector multi-period table
+  Time-range buttons              查詢個股排名 (text_input)
+  Breadth chart (620 px)          ↳ result card (if query active):
+  Sector bar chart (50MA %)           symbol + company name
+                                      三種排名並排 (#N / total)
+                                      詳細資訊（依 sort_mode 切換）
+                                  Sort buttons (市值貢獻/距均線/突破訊號)
+                                  Top-10 ranking table
+                                  Sector multi-period table
                                     (5日 / 20日 / 50日 % above 50MA)
 ```
 
 - `indicators_html(val50, val200)` renders both breadth bars as a single flex row; dot position clamped to `[2, 98]%`.
 - `data_date` is taken from `history.index[-1]`, not `date.today()` — reflects actual last trading day.
 - "資料非最新" orange badge appears when `data_date < today`.
+- Theme toggle is a single button in the title row (cycles light ↔ dark); ↻ 更新資料 sits beside the indicator panel.
 
 ## Chart Architecture (`app.py`)
 
@@ -136,6 +142,19 @@ The y-axis is `fixedrange=True` (only horizontal pan/zoom allowed). `scrollZoom=
 | `calc_sector_breadth(stock_metrics)` | Current sector 50/200 MA % |
 | `calc_sector_breadth_multiperiod(prices, constituents, periods)` | Sector % above 50MA at N days ago (default: 5, 20, 50) |
 | `get_extreme_stats(history)` | All-time high/low values and dates |
+
+## Stock Lookup (個股排名查詢)
+
+The right column starts with a `st.text_input` (key `"ticker_lookup"`). Query resolution order:
+1. Exact `symbol` match → use directly.
+2. Fuzzy match on `symbol` + `company` (case-insensitive `str.contains`) → if exactly 1 hit, auto-resolve; if multiple, show `st.selectbox` (max 10 options).
+3. No match → red "查無符合" card.
+
+The result card has two sections:
+- **Top**: three rank badges side-by-side — 市值貢獻 (`contrib_score` desc), 距均線 (`dist_50` desc, excludes NaN rows), 突破訊號 (`signal_200.abs()*2 + signal_50.abs()` desc). Colour: top 10% green, top 33% blue, mid grey, bottom dim.
+- **Bottom**: switches with `st.session_state.sort_mode` — contrib shows contrib_score/daily_return/weight_pct; dist shows dist_50/above_50/dist_200/above_200; signal shows signal tags + dist values.
+
+`contrib_score = weight_pct × daily_return / 100` — this is a *daily* contribution, not long-term performance. A heavy stock that falls hard ranks last.
 
 ## Important Quirks
 
