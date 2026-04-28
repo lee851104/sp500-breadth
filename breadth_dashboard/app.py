@@ -29,9 +29,11 @@ st.set_page_config(
 
 st.session_state.setdefault("sort_mode", "contrib")
 st.session_state.setdefault("time_range", "5Y")
+st.session_state.setdefault("theme", "dark")
 
-T       = DARK
-is_dark = True
+from config import LIGHT
+T       = DARK if st.session_state.theme == "dark" else LIGHT
+is_dark = st.session_state.theme == "dark"
 
 # ─── CSS ─────────────────────────────────────────────────────
 st.markdown(
@@ -262,7 +264,7 @@ is_stale  = (not history.empty) and (data_date < today_str)
 # ═══════════════════════════════════════════════════════════════
 # 標題列
 # ═══════════════════════════════════════════════════════════════
-_head_col, _ = st.columns([9, 1])
+_head_col, _theme_col = st.columns([9, 1])
 with _head_col:
     st.markdown(
         '<div style="padding:20px 0 4px;">'
@@ -277,6 +279,11 @@ with _head_col:
         '</p>'
         '</div>',
         unsafe_allow_html=True)
+with _theme_col:
+    st.markdown('<div style="height:28px;"></div>', unsafe_allow_html=True)
+    if st.button("☾ 深色" if not is_dark else "☀ 淺色", key="btn_theme"):
+        st.session_state["theme"] = "light" if is_dark else "dark"
+        st.rerun()
 st.markdown(
     '<div style="border-top:1px solid ' + T["border"] + ';margin:4px 0 18px;"></div>',
     unsafe_allow_html=True)
@@ -323,9 +330,9 @@ left_col, right_col = st.columns([3, 1], gap="medium")
 # ───────────────────────────────────────────────────────────────
 with left_col:
 
-    # ── 時間範圍按鈕（range-pills 樣式）────────────────────
+    # ── 時間範圍按鈕（均等欄寬）────────────────────────────
     range_opts = ["1Y", "3Y", "5Y", "10Y", "ALL"]
-    rcols = st.columns([1, 1, 1, 1, 1, 5])
+    rcols = st.columns(len(range_opts))
     for opt, rc in zip(range_opts, rcols):
         with rc:
             is_active = st.session_state.time_range == opt
